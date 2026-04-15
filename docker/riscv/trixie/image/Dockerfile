@@ -4,6 +4,13 @@
 # syntax=docker/dockerfile:1
 
 # Images imports
+FROM debian:trixie-slim AS gdb-riscv64
+ENV DEBIAN_FRONTEND=noninteractive
+RUN dpkg --add-architecture riscv64 && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends gdb:riscv64 && \
+    rm -rf /var/lib/apt/lists/*
+
 FROM baptleduc/xen-riscv64-kernel:6.18 AS kernel-riscv64
 FROM registry.gitlab.com/xen-project/people/olkur/xen/tests-artifacts/qemu-system-riscv64:8.2.0-aia-riscv64 AS qemu-aia-riscv64
 
@@ -101,6 +108,68 @@ RUN mkdir -p lib && \
         cp "$lib" ./lib/; \
     done
 
+# Debug tools (opt-in via --build-arg DEBUG_XL=1)
+ARG DEBUG_XL=0
+RUN --mount=type=bind,from=gdb-riscv64,source=/,target=/gdb-stage \
+    if [ "${DEBUG_XL}" = "1" ]; then \
+        cp /gdb-stage/usr/bin/gdb ./bin/gdb && \
+        for lib in \
+            libatomic.so.1 \
+            libbabeltrace.so.1 \
+            libbabeltrace-ctf.so.1 \
+            libbrotlicommon.so.1 \
+            libbrotlidec.so.1 \
+            libbz2.so.1.0 \
+            libcom_err.so.2 \
+            libcrypto.so.3 \
+            libcurl-gnutls.so.4 \
+            libdebuginfod.so.1 \
+            libdw.so.1 \
+            libelf.so.1 \
+            libexpat.so.1 \
+            libffi.so.8 \
+            libglib-2.0.so.0 \
+            libgmp.so.10 \
+            libgnutls.so.30 \
+            libgssapi_krb5.so.2 \
+            libhogweed.so.6 \
+            libidn2.so.0 \
+            libjson-c.so.5 \
+            libk5crypto.so.3 \
+            libkeyutils.so.1 \
+            libkrb5.so.3 \
+            libkrb5support.so.0 \
+            liblber.so.2 \
+            libldap.so.2 \
+            liblzma.so.5 \
+            libm.so.6 \
+            libmpfr.so.6 \
+            libncursesw.so.6 \
+            libnettle.so.8 \
+            libnghttp2.so.14 \
+            libnghttp3.so.9 \
+            libngtcp2.so.16 \
+            libngtcp2_crypto_gnutls.so.8 \
+            libp11-kit.so.0 \
+            libpcre2-8.so.0 \
+            libpsl.so.5 \
+            libpython3.13.so.1.0 \
+            libreadline.so.8 \
+            libresolv.so.2 \
+            librtmp.so.1 \
+            libsasl2.so.2 \
+            libsource-highlight.so.4 \
+            libssh2.so.1 \
+            libssl.so.3 \
+            libstdc++.so.6 \
+            libtasn1.so.6 \
+            libtinfo.so.6 \
+            libunistring.so.5 \
+            libxxhash.so.0 \
+            libzstd.so.1; do \
+            cp /gdb-stage/usr/lib/riscv64-linux-gnu/$lib ./lib/; \
+        done; \
+    fi
 
 WORKDIR ${BUILD_DIR}
 
