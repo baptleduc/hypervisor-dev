@@ -171,14 +171,12 @@ RUN --mount=type=bind,from=gdb-riscv64,source=/,target=/gdb-stage \
         done; \
     fi
 
-WORKDIR ${BUILD_DIR}
-
+WORKDIR ${TMP_DOMU_INITRD_DIR}
+COPY --from=busybox-builder /busybox-install .
 # Build minimal domU initrd from busybox
 RUN mkdir -p ${TMP_DOMU_INITRD_DIR}/bin ${TMP_DOMU_INITRD_DIR}/sbin \
              ${TMP_DOMU_INITRD_DIR}/proc ${TMP_DOMU_INITRD_DIR}/sys \
              ${TMP_DOMU_INITRD_DIR}/dev ${TMP_DOMU_INITRD_DIR}/etc/init.d && \
-    cp -a ${INITRD_DIR}/bin/busybox ${TMP_DOMU_INITRD_DIR}/bin/ && \
-    ${TMP_DOMU_INITRD_DIR}/bin/busybox --install -s ${TMP_DOMU_INITRD_DIR}/bin/ && \
     printf '%s\n' \
         '#!/bin/sh' \
         'mount -t proc proc /proc' \
@@ -191,6 +189,7 @@ RUN mkdir -p ${TMP_DOMU_INITRD_DIR}/bin ${TMP_DOMU_INITRD_DIR}/sbin \
     genext2fs -b 4096 -N 512 -U -d ${TMP_DOMU_INITRD_DIR}/ ${DOMU_INITRD_IMG} && \
     rm -rf ${TMP_DOMU_INITRD_DIR}
 
+WORKDIR ${BUILD_DIR}
 # External binaries
 COPY --from=kernel-riscv64 \
     /Image.gz ${ARTIFACTS_DIR}/Image.gz
