@@ -4,8 +4,18 @@
 # syntax=docker/dockerfile:1
 
 # Images imports
-FROM baptleduc/xen-riscv64-kernel:6.18 AS kernel-riscv64
-FROM registry.gitlab.com/xen-project/people/olkur/xen/tests-artifacts/qemu-system-riscv64:8.2.0-aia-riscv64 AS qemu-aia-riscv64
+# Pinned to linux/amd64 – these images have no arm64 variant.
+# Image.gz and opensbi firmware are riscv64 binaries and run on any host arch.
+FROM --platform=linux/amd64 baptleduc/xen-riscv64-kernel:6.18 AS kernel-riscv64
+FROM --platform=linux/amd64 registry.gitlab.com/xen-project/people/olkur/xen/tests-artifacts/qemu-system-riscv64:8.2.0-aia-riscv64 AS qemu-aia-riscv64
+
+# Native-platform QEMU: provides a host-native qemu-system-riscv64 for arm64 hosts.
+# On amd64 builds this stage is discarded in favour of the AIA-patched GitLab binary.
+# Debian trixie ships QEMU 9.x which supports aia=aplic-imsic since QEMU 7.1.
+FROM debian:trixie-slim AS qemu-native
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends qemu-system-misc && \
+    rm -rf /var/lib/apt/lists/*
 
 FROM debian:trixie-slim AS busybox-builder
 
@@ -58,6 +68,9 @@ ARG TMP_DOMU_INITRD_DIR=/tmp/domu-initrd
 ENV DEBIAN_FRONTEND=noninteractive
 ENV CROSS_COMPILE=riscv64-linux-gnu-
 ENV XEN_TARGET_ARCH=riscv64
+
+# Host platform: used to select the correct QEMU binary at build time
+ARG TARGETARCH=amd64
 
 SHELL ["/bin/bash", "-c"]
 
@@ -123,11 +136,20 @@ RUN mkdir -p ${TMP_DOMU_INITRD_DIR}/bin ${TMP_DOMU_INITRD_DIR}/sbin \
     rm -rf ${TMP_DOMU_INITRD_DIR}
 
 # External binaries
+# Image.gz and OpenSBI are riscv64 binaries – identical regardless of host arch
 COPY --from=kernel-riscv64 \
     /Image.gz ${ARTIFACTS_DIR}/Image.gz
 
 COPY --from=qemu-aia-riscv64 \
-    /qemu-system-riscv64 /opensbi-riscv64-generic-fw_dynamic.bin ${ARTIFACTS_DIR}/
+    /opensbi-riscv64-generic-fw_dynamic.bin ${ARTIFACTS_DIR}/
+
+# qemu-system-riscv64 must match the host CPU architecture:
+#   amd64 → AIA-patched build from GitLab (guarantees aia=aplic-imsic support)
+#   arm64 → Debian trixie native build (QEMU 9.x, AIA supported since QEMU 7.1)
+COPY --from=qemu-aia-riscv64 /qemu-system-riscv64 /tmp/qemu-amd64/
+COPY --from=qemu-native /usr/bin/qemu-system-riscv64 /tmp/qemu-arm64/
+RUN cp /tmp/qemu-${TARGETARCH}/qemu-system-riscv64 ${ARTIFACTS_DIR}/ && \
+    rm -rf /tmp/qemu-amd64 /tmp/qemu-arm64
 
 # Local files
 COPY xl.conf domu.cfg .config ${CONFIGS_DIR}/

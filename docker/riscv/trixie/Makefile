@@ -16,6 +16,7 @@ $(error XEN_HOST is not set. Copy config.mk.example to config.mk and fill in you
 endif
 
 IMAGE ?= baptleduc/xen-riscv64-trixie:latest
+PLATFORMS ?= linux/amd64,linux/arm64
 $(info )
 $(info Image: $(IMAGE))
 $(info )
@@ -24,7 +25,6 @@ BUILD_DIR := /build
 XEN_DIR   := $(BUILD_DIR)/xen
 
 DOCKER := docker run --rm -it \
-	--platform linux/amd64 \
 	-v "$(XEN_HOST)":$(XEN_DIR)
 
 # Override the pre-compiled kernel bundled in the Docker image
@@ -45,7 +45,7 @@ ifneq ($(filter $(INITRD),$(VALID_INITRD)),$(INITRD))
 $(error INITRD must be one of: $(VALID_INITRD) (got '$(INITRD)'))
 endif
 
-.PHONY: help setup build-image shell run run-rebuild debug debug-rebuild gdb gdb-rebuild clean
+.PHONY: help setup build-image push-image shell run run-rebuild debug debug-rebuild gdb gdb-rebuild clean
 
 help: ## Show this help message
 	@echo "Targets:"
@@ -56,6 +56,7 @@ help: ## Show this help message
 	@echo "  INITRD=initrd        Minimal initrd (default)"
 	@echo "  INITRD=initrd-tools  Initrd with Xen tools included"
 	@echo "  IMAGE=<tag>          Docker image (default: $(IMAGE))"
+	@echo "  PLATFORMS=<list>     Platforms for push-image (default: $(PLATFORMS))"
 	@echo "  KERNEL=<path>        Local kernel binary, overrides the image default"
 	@echo "  VMLINUX=<path>       Path to vmlinux, enables kernel symbols in GDB"
 	@echo ""
@@ -64,8 +65,11 @@ help: ## Show this help message
 setup: ## Register QEMU binfmt emulators (run once after each reboot)
 	docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 
-build-image: ## Build the Docker image locally from image/
-	docker buildx build --platform linux/amd64 -f image/Dockerfile -t $(IMAGE) image/
+build-image: ## Build the Docker image for the current host platform
+	docker buildx build --load -f image/Dockerfile -t $(IMAGE) image/
+
+push-image: ## Build and push multi-arch image (amd64 + arm64) to a registry
+	docker buildx build --platform $(PLATFORMS) --push -f image/Dockerfile -t $(IMAGE) image/
 
 shell: ## Open an interactive shell in the container
 	$(DOCKER) -p 1234:1234 $(IMAGE) /bin/bash
