@@ -23,11 +23,18 @@ log() { [[ $VERBOSE -eq 1 ]] && echo "$*" >&2 || true; }
 # Arrays to store parsed data
 declare -A PLATFORM_DATA
 declare -A DOM0_DATA
+declare -A DOMU_DATA
 
 get_dom0_val() {
     local key=$1
 
     echo "${DOM0_DATA[$key]}"
+}
+
+get_domu_val() {
+    local key=$1
+
+    echo "${DOMU_DATA[$key]}"
 }
 
 get_platform_val() {
@@ -59,6 +66,16 @@ generate_base_dts() {
     esac
 
     case $platform_name in
+        dom0less-qemu-virt)
+            "${QEMU}" -M virt$ic_flags -smp "${platform_cpu_num}" -nographic \
+                      -bios ${FW_PATH} \
+                      -m "${platform_ram_size}" \
+                      -append "${xen_boot_args}" -kernel ${XEN} \
+                      -machine dumpdtb=${BUILDDIR}/${dts_name}.dtb
+            dtc -I dtb ${BUILDDIR}/${dts_name}.dtb > "${BUILDDIR}/${dts_name}.dts"
+            remove_unsupported_nodes ${BUILDDIR}/${dts_name}
+            rm ${BUILDDIR}/$dts_name.dtb
+            ;;
         dom0-qemu-virt)
             local kernel_path=$(get_dom0_val KERNEL_PATH)
             local kernel_addr=$(get_dom0_val KERNEL_ADDR)
@@ -86,8 +103,54 @@ generate_base_dts() {
     echo "${BUILDDIR}/$dts_name.dts"
 }
 
+module_size() {
+    printf "0x%x" "$(stat -c %s "$1")"
+}
+
+# Append a /chosen/domU1 node, dtc merges it into the existing /chosen.
+append_domu_node() {
+    local dts_name=$1
+    local kernel_addr=$(get_domu_val KERNEL_ADDR)
+    local kernel_path=$(get_domu_val KERNEL_PATH)
+    local ramdisk_addr=$(get_domu_val RAMDISK_ADDR)
+    local ramdisk_path=$(get_domu_val RAMDISK_PATH)
+
+    # Without dom0, Xen reads its command line from xen,xen-bootargs
+    sed -i 's/\bbootargs\b/xen,xen-bootargs/' "${dts_name}"
+
+    cat >> "${dts_name}" <<EOF
+/ {
+    chosen {
+        domU1 {
+            #address-cells = <1>;
+            #size-cells = <1>;
+            compatible = "xen,domain";
+            memory = <0 $(get_domu_val MEMORY_KB)>;
+            cpus = <$(get_domu_val CPUS_NUM)>;
+            vsbi_uart;
+
+            module@${kernel_addr#0x} {
+                compatible = "multiboot,kernel", "multiboot,module";
+                reg = <${kernel_addr} $(module_size "${kernel_path}")>;
+                bootargs = "$(get_domu_val BOOTARGS)";
+            };
+
+            module@${ramdisk_addr#0x} {
+                compatible = "multiboot,ramdisk", "multiboot,module";
+                reg = <${ramdisk_addr} $(module_size "${ramdisk_path}")>;
+            };
+        };
+    };
+};
+EOF
+}
+
 generate_dtb() {
     dts_name=$(generate_base_dts)
+
+    if [[ $(get_platform_val NAME) == dom0less-qemu-virt ]]; then
+        append_domu_node "${dts_name}"
+    fi
 
     # generate dtb
     dtb_name="$(get_platform_val NAME)".dtb
@@ -145,6 +208,34 @@ process_dom0_data() {
     check_and_set_dom0_data_default BOOTARGS ""
 }
 
+check_and_set_domu_data_default() {
+    local key_to_check="$1"
+    local default_value="$2"
+
+    if [[ ! -v "DOMU_DATA[$key_to_check]" ]]; then
+        DOMU_DATA[$key_to_check]="$default_value"
+    fi
+}
+
+check_and_failure_domu_data() {
+    local key_to_check="$1"
+
+    if [[ ! -v "DOMU_DATA[$key_to_check]" ]]; then
+        echo "DOMU_$key_to_check should be set!"
+        exit 1
+    fi
+}
+
+process_domu_data() {
+    check_and_failure_domu_data KERNEL_ADDR
+    check_and_failure_domu_data KERNEL_PATH
+    check_and_failure_domu_data RAMDISK_ADDR
+    check_and_failure_domu_data RAMDISK_PATH
+    check_and_set_domu_data_default BOOTARGS ""
+    check_and_set_domu_data_default CPUS_NUM 1
+    check_and_set_domu_data_default MEMORY_KB 0x40000
+}
+
 parse_config_file() {
     while IFS= read -r line; do
         if [[ $line =~ ^\s*# || -z $line ]]; then
@@ -169,11 +260,18 @@ parse_config_file() {
             DOM0*)
                 DOM0_DATA["$rest"]=$value
                 ;;
+            DOMU*)
+                DOMU_DATA["$rest"]=$value
+                ;;
         esac
     done < "$CONFIG_FILE"
 
     process_platform_data
-    process_dom0_data
+    if [[ $(get_platform_val NAME) == dom0less-qemu-virt ]]; then
+        process_domu_data
+    else
+        process_dom0_data
+    fi
 }
 
 case "${TEST_CASE}" in
@@ -207,6 +305,22 @@ case "${TEST_CASE}" in
         DOM0_RAMDISK_ADDR=\"${DOM0_RAMDISK_ADDR}\"
         DOM0_RAMDISK_PATH=\"${DOM0_RAMDISK_PATH}\"
         DOM0_BOOTARGS=\"${DOM0_BOOTARGS}\"" > "${CONFIG_FILE}"
+        ;;
+    "dom0less-test")
+        CONFIG_FILE="dom0less.conf"
+
+        echo "PLATFORM_NAME=\"dom0less-qemu-virt\"
+        PLATFORM_CPU_NUM=\"2\"
+        PLATFORM_RAM_SIZE=\"2g\"
+        PLATFORM_XEN_BOOTARGS=\"com1=poll sched=null\"
+        PLATFORM_INTERRUPT_CONTROLLER=\"aplic-imsic\"
+
+        DOMU_KERNEL_ADDR=\"0x808ef000\"
+        DOMU_KERNEL_PATH=\"${KERNEL}\"
+        DOMU_RAMDISK_ADDR=\"0x90400000\"
+        DOMU_RAMDISK_PATH=\"${INITRD}\"
+        DOMU_CPUS_NUM=\"1\"
+        DOMU_BOOTARGS=\"rw root=/dev/ram console=hvc0\"" > "${CONFIG_FILE}"
         ;;
     *)
         echo "Invalid option: ${TEST_CASE}"

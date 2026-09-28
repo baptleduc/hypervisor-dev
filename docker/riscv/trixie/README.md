@@ -80,6 +80,7 @@ make <target> [INITRD=initrd|initrd-tools]
 | `build-image`   | Build the Docker image locally from `image/`         |
 | `shell`         | Open an interactive shell in the container           |
 | `run`           | Boot Xen + dom0 in QEMU                              |
+| `run-dom0less`  | Build Xen, then boot it dom0less with one domU       |
 | `run-rebuild`   | Rebuild Xen hypervisor, then boot                    |
 | `debug`         | Boot Xen in QEMU, wait for GDB on port 1234          |
 | `debug-rebuild` | Rebuild Xen, then boot in GDB-wait mode              |

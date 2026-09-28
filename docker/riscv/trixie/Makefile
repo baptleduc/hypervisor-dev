@@ -50,7 +50,7 @@ ifneq ($(filter $(INITRD),$(VALID_INITRD)),$(INITRD))
 $(error INITRD must be one of: $(VALID_INITRD) (got '$(INITRD)'))
 endif
 
-.PHONY: help setup build-kernel build-image shell run run-rebuild debug debug-rebuild gdb gdb-rebuild clean
+.PHONY: help setup build-kernel build-image shell run run-dom0less run-rebuild debug debug-rebuild gdb gdb-rebuild clean
 
 help: ## Show this help message
 	@echo "Targets:"
@@ -88,6 +88,13 @@ shell: ## Open an interactive shell in the container
 run: ## Boot Xen + dom0 in QEMU
 	$(DOCKER) -p 1234:1234 $(IMAGE) \
 		/bin/bash -c "make $(INITRD) && make go"
+
+# Mount the local image/ scripts so the target works without rebuilding the image.
+run-dom0less: ## Build Xen, then boot it dom0less with one domU in QEMU
+	$(DOCKER) \
+		-v "$(CURDIR)/image/Makefile":$(BUILD_DIR)/Makefile:ro \
+		-v "$(CURDIR)/image/generate_dtb.sh":$(BUILD_DIR)/dtb/generate_dtb.sh:ro \
+		$(IMAGE) /bin/bash -c "make go-dom0less"
 
 debug: ## Boot Xen in QEMU, wait for GDB on port 1234
 	$(DOCKER) -p 1234:1234 $(IMAGE) \

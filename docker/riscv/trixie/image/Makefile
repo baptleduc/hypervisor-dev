@@ -24,7 +24,7 @@ GDB?=/usr/bin/gdb-multiarch
 INITRD_STAMP := .stamp_initrd_with_tools
 XEN_MAKE := $(MAKE) -C $(XEN_ROOT) -j$(nproc)
 
-QEMU_BASE_FLAGS = \
+QEMU_COMMON_FLAGS = \
 	-M virt,aclint=off,aia=aplic-imsic,aia-guests=7 \
 	-cpu rv64,smstateen=on,sstc=off\
 	-bios $(OPENSBI) \
@@ -32,9 +32,15 @@ QEMU_BASE_FLAGS = \
 	-nographic \
 	-m 2g \
 	-kernel $(XEN_BIN) \
-	-device loader,file=$(KERNEL),addr=0x808ef000 \
+	-device loader,file=$(KERNEL),addr=0x808ef000
+
+QEMU_BASE_FLAGS = $(QEMU_COMMON_FLAGS) \
 	-device loader,file=$(INITRD),addr=0x90400000 \
 	-dtb $(DTB_DIR)/dom0-qemu-virt.dtb
+
+QEMU_DOM0LESS_FLAGS = $(QEMU_COMMON_FLAGS) \
+	-device loader,file=$(DOMU_INITRD_IMG),addr=0x90400000 \
+	-dtb $(DTB_DIR)/dom0less-qemu-virt.dtb
 
 QEMU_DEBUG_FLAGS = -s -S
 
@@ -58,7 +64,7 @@ GDB_ARGS += \
 	-ex "b start_xen" \
 	-ex "c"
 
-.PHONY: all clean help initrd-tools install-tools install-xen install build-tools build-xen build go go-debug gdb initrd create-common-dirs create-tools-dirs
+.PHONY: all clean help initrd-tools install-tools install-xen install build-tools build-xen build go go-debug go-dom0less gdb initrd create-common-dirs create-tools-dirs
 
 help: ## Display this help message
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | \
@@ -169,6 +175,12 @@ go-debug: $(INITRD) $(KERNEL) $(QEMU) $(OPENSBI) $(XEN_BIN) $(DTB_SCRIPT) ## Lau
 	cd $(DTB_DIR) && \
 	bash $(DTB_SCRIPT) dom0-domU-test $(DTB_DIR) $(OPENSBI) $(QEMU) $(XEN_BIN) $(KERNEL) $(INITRD)
 	$(QEMU) $(QEMU_BASE_FLAGS) $(QEMU_DEBUG_FLAGS)
+
+go-dom0less: build-xen $(KERNEL) $(QEMU) $(OPENSBI) $(DTB_SCRIPT) ## Build Xen, then launch it dom0less with one domU in QEMU
+	@echo "Using Linux kernel: $(KERNEL)"
+	cd $(DTB_DIR) && \
+	bash $(DTB_SCRIPT) dom0less-test $(DTB_DIR) $(OPENSBI) $(QEMU) $(XEN_BIN) $(KERNEL) $(DOMU_INITRD_IMG)
+	$(QEMU) $(QEMU_DOM0LESS_FLAGS)
 
 gdb: $(GDB) ## Attach GDB to a running Xen instance
 	$(GDB) $(GDB_FLAGS) $(GDB_ARGS)
