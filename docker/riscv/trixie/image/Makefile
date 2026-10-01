@@ -73,7 +73,10 @@ help: ## Display this help message
 # --- Internal targets ---
 
 $(XEN_CONFIGURE_OUT): $(XEN_ROOT)/configure
-	cd $(XEN_ROOT) && ./configure --prefix=/usr --host=riscv64-linux-gnu
+	cd $(XEN_ROOT) && ./configure --prefix=/usr --host=riscv64-linux-gnu --enable-ocamltools \
+		--with-system-ipxe=/usr/share/ipxe/ipxe.bin \
+		--with-system-ovmf=/usr/share/edk2/OVMF.fd \
+		IASL=/usr/bin/iasl
 
 $(XEN_CONFIG):
 	cp $(CONFIGS_DIR)/.config $(XEN_CONFIG)

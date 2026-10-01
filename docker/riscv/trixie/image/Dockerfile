@@ -5,8 +5,11 @@
 
 # Images imports
 ARG KERNEL_IMAGE_TAG=latest
+ARG LIBEMPSERVER_IMAGE_TAG=1.1.1
 FROM baptleduc/xen-riscv64-kernel:${KERNEL_IMAGE_TAG} AS kernel-riscv64
 FROM registry.gitlab.com/xen-project/people/olkur/xen/tests-artifacts/qemu-system-riscv64:8.2.0-aia-riscv64 AS qemu-aia-riscv64
+# Built from docker/riscv/libempserver, needed by XCP-ng's xenguest
+FROM baptleduc/libempserver-riscv64:${LIBEMPSERVER_IMAGE_TAG} AS libempserver-riscv64
 
 FROM debian:trixie-slim AS dtc-riscv64
 ENV DEBIAN_FRONTEND=noninteractive
@@ -95,6 +98,9 @@ DEPS=(
     # Cross-compiled libs
     zlib1g-dev:riscv64 libyajl-dev:riscv64 uuid-dev:riscv64 libfdt-dev:riscv64 libyaml-0-2:riscv64
     libncurses-dev:riscv64 python3-dev:riscv64 python3-setuptools:riscv64
+    # OCaml toolstack bindings (ocaml:riscv64 itself is extracted below)
+    ocaml-interp:riscv64 ocaml-base:riscv64 libzstd-dev:riscv64 ocaml-findlib:riscv64
+    libjson-c-dev:riscv64 acpica-tools
     # Tools
     wget curl ca-certificates automake genext2fs
     # QEMU phase
@@ -102,8 +108,22 @@ DEPS=(
 )
 
 apt-get -y --no-install-recommends install "${DEPS[@]}"
+
+# ocaml:riscv64 depends on gcc:riscv64 and binutils:riscv64, which conflict
+# with the amd64 build-essential. Its ocamlopt only calls the
+# riscv64-linux-gnu-{gcc,as} cross tools installed above, so extract the
+# package without registering it in dpkg.
+cd /tmp
+apt-get download ocaml:riscv64
+dpkg-deb -x ocaml_*_riscv64.deb /
+rm ocaml_*_riscv64.deb
+cd -
+
 rm -rf /var/lib/apt/lists/*
 EOF
+
+# riscv64 libempserver headers and libs, for building xenguest
+COPY --from=libempserver-riscv64 /usr/ /usr/
 
 # Copy riscv64 runtime libs to initrd
 WORKDIR ${INITRD_DIR}
@@ -111,11 +131,15 @@ COPY --from=busybox-builder /busybox-install .
 RUN mkdir -p lib && \
     for lib in /usr/lib/ld-linux-riscv64-lp64d.so.1 \
                /usr/lib/riscv64-linux-gnu/libc.so.6 \
+               /usr/lib/riscv64-linux-gnu/libm.so.6 \
+               /usr/lib/riscv64-linux-gnu/libzstd.so.1 \
                /usr/lib/riscv64-linux-gnu/libuuid.so.1 \
                /usr/lib/riscv64-linux-gnu/libncurses.so.6 \
                /usr/lib/riscv64-linux-gnu/libz.so.1 \
                /usr/lib/riscv64-linux-gnu/libfdt.so.1 \
                /usr/lib/riscv64-linux-gnu/libyajl.so.2 \
+               /usr/lib/riscv64-linux-gnu/libjson-c.so.5 \
+               /usr/lib/riscv64-linux-gnu/libempserver.so.1 \
                /usr/lib/riscv64-linux-gnu/libgcc_s.so.1; do \
         cp "$lib" ./lib/; \
     done
