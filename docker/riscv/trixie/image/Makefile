@@ -183,6 +183,16 @@ ifneq ($(wildcard $(XENOPSD_DIR)/xapi),)
 	install -D -m 644 $(XENOPSD_DIR)/pool.conf $(INITRD_DIR)/etc/xensource/pool.conf
 	install -D -m 644 $(XENOPSD_DIR)/db.conf $(INITRD_DIR)/etc/xensource/db.conf
 	install -D -m 644 $(XENOPSD_DIR)/udhcpd.skel $(INITRD_DIR)/etc/xensource/udhcpd.skel
+	# dom0 console for XO: wsproxy (from xen-api) and vncterm + sockexec
+	# (docker/riscv/console), installed when built
+	if [ -x $(XENOPSD_DIR)/wsproxy ] && [ -x $(XENOPSD_DIR)/vncterm ] && [ -x $(XENOPSD_DIR)/sockexec ]; then \
+		install -D -m 755 $(XENOPSD_DIR)/wsproxy $(INITRD_DIR)/usr/libexec/xapi/wsproxy && \
+		install -D -m 755 $(XENOPSD_DIR)/sockexec $(INITRD_DIR)/usr/libexec/xapi/sockexec && \
+		install -D -m 755 $(XENOPSD_DIR)/vncterm $(INITRD_DIR)/usr/lib/xen/bin/vncterm && \
+		printf '%s\n' '#!/bin/sh' 'clear' 'if [ -x /bin/login ]; then exec /bin/login root; fi' 'exec /bin/sh' \
+			> $(INITRD_DIR)/opt/xensource/libexec/dom0term.sh && \
+		chmod 755 $(INITRD_DIR)/opt/xensource/libexec/dom0term.sh; \
+	fi
 	# ponytail: directories xapi requires at start-up, left empty (xen-cmdline
 	# is only access()-checked)
 	mkdir -p $(INITRD_DIR)/opt/xensource/sm $(INITRD_DIR)/opt/xensource/www \
@@ -241,6 +251,12 @@ initrd-tools: install create-tools-dirs xenopsd-files ## Create initrd with Xen 
 	'    timeout 120 /opt/xensource/libexec/gencert /etc/xensource/xapi-ssl.pem -1 default ||' \
 	'        cp /etc/xensource/xapi-pool-tls.pem /etc/xensource/xapi-ssl.pem' \
 	'    xapi > /var/log/xapi.log 2>&1 &' \
+	'    # dom0 console: xapi hands websocket consoles to wsproxy, which' \
+	'    # connects to vncterm on 127.0.0.1:5900 (host_console_vncport)' \
+	'    if [ -x /usr/libexec/xapi/wsproxy ]; then' \
+	'        /usr/libexec/xapi/sockexec /var/lib/xcp/websockproxy /usr/libexec/xapi/wsproxy > /var/log/wsproxy.log 2>&1 &' \
+	'        TERM=linux /usr/lib/xen/bin/vncterm -v 127.0.0.1:0 -r -x /local/domain/0/console -T -c /opt/xensource/libexec/dom0term.sh > /var/log/vncterm.log 2>&1 &' \
+	'    fi' \
 	'fi' \
 	'exec /bin/sh' \
 	> $(RCS_FILE) && \
