@@ -101,6 +101,12 @@ DEPS=(
     # OCaml toolstack bindings (ocaml:riscv64 itself is extracted below)
     ocaml-interp:riscv64 ocaml-base:riscv64 libzstd-dev:riscv64 ocaml-findlib:riscv64
     libjson-c-dev:riscv64 acpica-tools
+    # xapi runtime libs, shipped in the initrd
+    libxxhash0:riscv64 libpci3:riscv64 libpam0g:riscv64 libcrypt1:riscv64
+    libgmp10:riscv64 libudev1:riscv64 libaudit1:riscv64 libcap2:riscv64
+    libcap-ng0:riscv64
+    # xcp-networkd dlopen()s these, so they are not in its NEEDED list
+    libnl-3-200:riscv64 libnl-route-3-200:riscv64 libffi8:riscv64
     # Tools
     wget curl ca-certificates automake genext2fs
     # QEMU phase
@@ -140,7 +146,19 @@ RUN mkdir -p lib && \
                /usr/lib/riscv64-linux-gnu/libyajl.so.2 \
                /usr/lib/riscv64-linux-gnu/libjson-c.so.5 \
                /usr/lib/riscv64-linux-gnu/libempserver.so.1 \
-               /usr/lib/riscv64-linux-gnu/libgcc_s.so.1; do \
+               /usr/lib/riscv64-linux-gnu/libgcc_s.so.1 \
+               /usr/lib/riscv64-linux-gnu/libxxhash.so.0 \
+               /usr/lib/riscv64-linux-gnu/libpci.so.3 \
+               /usr/lib/riscv64-linux-gnu/libpam.so.0 \
+               /usr/lib/riscv64-linux-gnu/libcrypt.so.1 \
+               /usr/lib/riscv64-linux-gnu/libgmp.so.10 \
+               /usr/lib/riscv64-linux-gnu/libudev.so.1 \
+               /usr/lib/riscv64-linux-gnu/libaudit.so.1 \
+               /usr/lib/riscv64-linux-gnu/libcap.so.2 \
+               /usr/lib/riscv64-linux-gnu/libcap-ng.so.0 \
+               /usr/lib/riscv64-linux-gnu/libnl-3.so.200 \
+               /usr/lib/riscv64-linux-gnu/libnl-route-3.so.200 \
+               /usr/lib/riscv64-linux-gnu/libffi.so.8; do \
         cp "$lib" ./lib/; \
     done
 
@@ -177,7 +195,8 @@ COPY --from=qemu-aia-riscv64 \
 
 # Local files
 COPY xl.conf domu.cfg .config \
-     xenopsd-xc.conf xenopsd-stub riscv.cfg xapi.conf gen-xensource-inventory \
+     xenopsd-xc.conf xenopsd-stub riscv.cfg xapi.conf squeezed.conf v6d.conf \
+     xcp-networkd.conf gen-xensource-inventory \
      ${CONFIGS_DIR}/
 COPY Makefile .
 COPY generate_dtb.sh ${DTB_DIR}/

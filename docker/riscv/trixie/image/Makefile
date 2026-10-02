@@ -164,6 +164,12 @@ ifneq ($(wildcard $(XENOPSD_DIR)/xapi),)
 	install -D -m 755 $(XENOPSD_DIR)/xapi $(INITRD_DIR)/usr/sbin/xapi
 	install -D -m 755 $(XENOPSD_DIR)/xe $(INITRD_DIR)/usr/bin/xe
 	install -D -m 644 $(CONFIGS_DIR)/xapi.conf $(INITRD_DIR)/etc/xapi.conf
+	install -D -m 755 $(XENOPSD_DIR)/squeezed $(INITRD_DIR)/usr/sbin/squeezed
+	install -D -m 644 $(CONFIGS_DIR)/squeezed.conf $(INITRD_DIR)/etc/squeezed.conf
+	install -D -m 755 $(XENOPSD_DIR)/v6d $(INITRD_DIR)/usr/sbin/v6d
+	install -D -m 644 $(CONFIGS_DIR)/v6d.conf $(INITRD_DIR)/etc/v6d.conf
+	install -D -m 755 $(XENOPSD_DIR)/xcp-networkd $(INITRD_DIR)/usr/sbin/xcp-networkd
+	install -D -m 644 $(CONFIGS_DIR)/xcp-networkd.conf $(INITRD_DIR)/etc/xcp-networkd.conf
 	install -D -m 755 $(CONFIGS_DIR)/gen-xensource-inventory $(INITRD_DIR)/usr/libexec/gen-xensource-inventory
 	install -D -m 644 $(XENOPSD_DIR)/pool.conf $(INITRD_DIR)/etc/xensource/pool.conf
 	install -D -m 644 $(XENOPSD_DIR)/db.conf $(INITRD_DIR)/etc/xensource/db.conf
@@ -205,6 +211,9 @@ initrd-tools: install create-tools-dirs xenopsd-files ## Create initrd with Xen 
 	'    xenopsd-xc > /var/log/xenopsd.log 2>&1 &' \
 	'fi' \
 	'if [ -x /usr/sbin/xapi ]; then' \
+	'    squeezed > /var/log/squeezed.log 2>&1 &' \
+	'    v6d > /var/log/v6d.log 2>&1 &' \
+	'    xcp-networkd > /var/log/xcp-networkd.log 2>&1 &' \
 	'    xapi > /var/log/xapi.log 2>&1 &' \
 	'fi' \
 	'exec /bin/sh' \
