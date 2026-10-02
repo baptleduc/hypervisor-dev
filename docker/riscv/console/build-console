@@ -1,0 +1,26 @@
+#!/bin/bash
+# Cross-build the dom0 console pieces into $OUT, next to the toolstack:
+#   vncterm   XCP-ng's vncterm (xcp-ng-rpms/vncterm SOURCES), serves dom0's
+#             console as VNC on 127.0.0.1:5900, where wsproxy connects
+#   sockexec  binds /var/lib/xcp/websockproxy for wsproxy (no systemd)
+# Run in the xen-riscv64-trixie image with /build/xen (tools built) and
+# /build/vncterm (vncterm-10.2.2 tarball, unpacked) mounted.
+# wsproxy itself is built from xen-api: dune build ocaml/wsproxy/cli/wsproxy.exe
+set -euo pipefail
+X=${XEN:-/build/xen}
+OUT=${OUT:-/build/xen-api/_riscv}
+CC=${CC:-riscv64-linux-gnu-gcc}
+HERE=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+
+cd /build/vncterm
+# Upstream Makefile calls gcc literally: use $(CC)
+sed -i 's/^\tgcc /\t$(CC) /' Makefile
+make clean >/dev/null 2>&1 || true
+make CC="$CC" \
+  CFLAGS="-I$PWD/include -I$X/tools/include -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_GNU_SOURCE -Wall -Wno-error -g -O1" \
+  LDFLAGS="-g -L$X/tools/libs/store -L$X/tools/libs/toolcore -Wl,-rpath-link,$X/tools/libs/toolcore"
+
+mkdir -p "$OUT"
+install -m 755 vncterm "$OUT/vncterm"
+"$CC" -O2 -Wall -o "$OUT/sockexec" "$HERE/sockexec.c"
+echo "built vncterm and sockexec into $OUT"
