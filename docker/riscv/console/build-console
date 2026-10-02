@@ -23,4 +23,7 @@ make CC="$CC" \
 mkdir -p "$OUT"
 install -m 755 vncterm "$OUT/vncterm"
 "$CC" -O2 -Wall -o "$OUT/sockexec" "$HERE/sockexec.c"
+# vncterm exits at start-up without a QEMU keymap ("Could not read keymap
+# file"); XCP-ng gets it from the qemu package. en-us from QEMU v9.0.0.
+install -D -m 644 "$HERE/keymaps/en-us" "$OUT/keymaps/en-us"
 echo "built vncterm and sockexec into $OUT"
