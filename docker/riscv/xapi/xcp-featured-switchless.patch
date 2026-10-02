@@ -1,0 +1,33 @@
+From 0b8da94226489070785aeed3c1b158c027c8e48e Mon Sep 17 00:00:00 2001
+From: Baptiste Le Duc <baptiste.le-duc@vates.tech>
+Date: Fri, 2 Oct 2026 14:58:32 +0200
+Subject: [PATCH] Support running without message-switch
+
+xcp-featured never called Xcp_service.configure, so it could not be
+told use-switch=false and always served on message-switch. Read the
+usual /etc/v6d.conf, and in that mode listen on V6_interface.xml_path,
+where xapi's V6_client connects (default_path is not used by it).
+
+Signed-off-by: Baptiste Le Duc <baptiste.le-duc@vates.tech>
+---
+ bin/xcp_featured.ml | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/bin/xcp_featured.ml b/bin/xcp_featured.ml
+index 9c745f0..2f6dabc 100644
+--- a/bin/xcp_featured.ml
++++ b/bin/xcp_featured.ml
+@@ -19,9 +19,12 @@ let bind () =
+   Server.get_version Xcp_ng.V6.get_version
+ 
+ let () =
++  (* Read /etc/v6d.conf (use-switch, ...) like the other xapi daemons *)
++  Xcp_service.configure () ;
+   bind () ;
+   let server =
+-    Xcp_service.make ~path:!V6_interface.default_path
++    (* Without the switch, xapi's V6_client connects to xml_path *)
++    Xcp_service.make ~path:V6_interface.xml_path
+       ~queue_name:!V6_interface.queue_name
+       ~rpc_fn:(Idl.Exn.server Server.implementation)
+       ()

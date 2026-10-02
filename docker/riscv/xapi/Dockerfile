@@ -45,9 +45,17 @@ RUN opam install ocamlfind \
         tar.2.6.0 tar-unix.2.6.0 x509.1.0.6 \
         mirage-crypto.2.0.1 mirage-crypto-pk.2.0.1 mirage-crypto-rng.2.0.1
 
+# xcp-networkd's netlink binding (libnl-3 through ctypes-foreign), pinned to
+# xs-opam's version. Separate layer so the ones above stay cached.
+RUN apt-get update && apt-get -y --no-install-recommends install \
+        libnl-3-dev libnl-route-3-dev && \
+    rm -rf /var/lib/apt/lists/* && \
+    opam install netlink.0.3.4
+
 ENV PATH=/opam/default/bin:$PATH \
     OCAMLPATH=/opam/default/lib \
     CAML_LD_LIBRARY_PATH=/opam/default/lib/stublibs
 
 COPY build-xapi /usr/local/bin/
+COPY xcp-featured-switchless.patch /usr/local/share/build-xapi/
 WORKDIR /build/xen-api

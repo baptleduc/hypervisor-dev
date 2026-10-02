@@ -1,7 +1,8 @@
 #!/bin/sh
-# Build xapi, xe, xenopsd-xc, xenopsd-cli and forkexecd (xenopsd spawns
-# xenguest through it) from /build/xen-api against the Xen tree
-# mounted at /build/xen (tools already built by xen-riscv64-trixie).
+# Build xapi, xe, squeezed, v6d, xcp-networkd, xenopsd-xc, xenopsd-cli and
+# forkexecd (xenopsd spawns xenguest through it) from /build/xen-api against
+# the Xen tree mounted at /build/xen (tools already built by
+# xen-riscv64-trixie).
 set -e
 
 XEN=${XEN:-/build/xen}
@@ -37,22 +38,39 @@ export DUNE_CONFIG__GLOBAL_LOCK=disabled
 
 cd /build/xen-api
 ./configure >/dev/null
+
+# XCP-ng's v6d (licensing daemon), xcp-featured. Built inside the xen-api
+# tree so dune reuses its xapi-idl and xapi-types, and removed afterwards.
+XCP_FEATURED_REV=0779b92fda0c03ef42496b368a41ffb6ff057d4b
+rm -rf ocaml/xcp-featured
+trap 'rm -rf /build/xen-api/ocaml/xcp-featured' EXIT
+git clone -q https://github.com/xcp-ng/xcp-featured ocaml/xcp-featured
+git -C ocaml/xcp-featured checkout -q $XCP_FEATURED_REV
+git -C ocaml/xcp-featured apply /usr/local/share/build-xapi/xcp-featured-switchless.patch
+
 dune build --profile=release \
     ocaml/xenopsd/xc/xenops_xc_main.exe \
     ocaml/xenopsd/cli/main.exe \
     ocaml/forkexecd/src/fe_main.exe \
     ocaml/xapi/xapi_main.exe \
-    ocaml/xe-cli/newcli.exe
+    ocaml/xe-cli/newcli.exe \
+    ocaml/squeezed/src/squeezed.exe \
+    ocaml/xcp-featured/bin/xcp_featured.exe \
+    ocaml/networkd/bin/networkd.exe
 # forkexecd spawns everything through this C helper, not built by dune
 make -C ocaml/forkexecd/helper vfork_helper
 
 mkdir -p $OUT
-install -m 755 _build/default/ocaml/xenopsd/xc/xenops_xc_main.exe $OUT/xenopsd-xc
-install -m 755 _build/default/ocaml/xenopsd/cli/main.exe $OUT/xenopsd-cli
-install -m 755 _build/default/ocaml/forkexecd/src/fe_main.exe $OUT/forkexecd
+# Stripped (-s): the binaries end up in the RAM-backed dom0 initrd
+install -s -m 755 _build/default/ocaml/xenopsd/xc/xenops_xc_main.exe $OUT/xenopsd-xc
+install -s -m 755 _build/default/ocaml/xenopsd/cli/main.exe $OUT/xenopsd-cli
+install -s -m 755 _build/default/ocaml/forkexecd/src/fe_main.exe $OUT/forkexecd
 install -m 755 ocaml/forkexecd/helper/vfork_helper $OUT/vfork_helper
-install -m 755 _build/default/ocaml/xapi/xapi_main.exe $OUT/xapi
-install -m 755 _build/default/ocaml/xe-cli/newcli.exe $OUT/xe
+install -s -m 755 _build/default/ocaml/xapi/xapi_main.exe $OUT/xapi
+install -s -m 755 _build/default/ocaml/xe-cli/newcli.exe $OUT/xe
+install -s -m 755 _build/default/ocaml/squeezed/src/squeezed.exe $OUT/squeezed
+install -s -m 755 _build/default/ocaml/xcp-featured/bin/xcp_featured.exe $OUT/v6d
+install -s -m 755 _build/default/ocaml/networkd/bin/networkd.exe $OUT/xcp-networkd
 # Config files xapi requires at start-up
 install -m 644 scripts/pool.conf $OUT/pool.conf
 install -m 644 scripts/db.conf.skel $OUT/db.conf
