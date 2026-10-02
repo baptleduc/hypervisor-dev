@@ -7,7 +7,19 @@
 ARG KERNEL_IMAGE_TAG=latest
 ARG LIBEMPSERVER_IMAGE_TAG=1.1.1
 FROM baptleduc/xen-riscv64-kernel:${KERNEL_IMAGE_TAG} AS kernel-riscv64
-FROM registry.gitlab.com/xen-project/people/olkur/xen/tests-artifacts/qemu-system-riscv64:8.2.0-aia-riscv64 AS qemu-aia-riscv64
+
+# QEMU for the platform + libslirp for user networking (for dom0's NIC)
+FROM debian:trixie-slim AS qemu-aia-riscv64
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get -y --no-install-recommends install \
+        build-essential ca-certificates curl xz-utils \
+        libglib2.0-dev libpixman-1-dev libslirp-dev ninja-build pkg-config \
+        python3 python3-venv && \
+    rm -rf /var/lib/apt/lists/*
+WORKDIR /build
+COPY build-qemu-riscv64.sh .
+RUN mkdir binaries && QEMU_VERSION=9.0.0 ./build-qemu-riscv64.sh
+
 # Built from docker/riscv/libempserver, needed by XCP-ng's xenguest
 FROM baptleduc/libempserver-riscv64:${LIBEMPSERVER_IMAGE_TAG} AS libempserver-riscv64
 
@@ -113,7 +125,7 @@ DEPS=(
     # Tools
     wget curl ca-certificates automake genext2fs
     # QEMU phase
-    device-tree-compiler libpixman-1-dev libglib2.0-0t64 gdb-multiarch
+    device-tree-compiler libpixman-1-dev libglib2.0-0t64 libslirp0 gdb-multiarch
 )
 
 apt-get -y --no-install-recommends install "${DEPS[@]}"
@@ -208,7 +220,8 @@ COPY --from=kernel-riscv64 \
     /Image.gz ${ARTIFACTS_DIR}/Image.gz
 
 COPY --from=qemu-aia-riscv64 \
-    /qemu-system-riscv64 /opensbi-riscv64-generic-fw_dynamic.bin ${ARTIFACTS_DIR}/
+    /build/binaries/qemu-system-riscv64 \
+    /build/binaries/opensbi-riscv64-generic-fw_dynamic.bin ${ARTIFACTS_DIR}/
 
 # Local files
 COPY xl.conf domu.cfg .config \
