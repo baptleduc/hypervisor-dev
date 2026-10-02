@@ -201,6 +201,14 @@ ifneq ($(wildcard $(XENOPSD_DIR)/xapi),)
 		    'vncterm_base:x:131072:131072::/:/bin/false' >> $(INITRD_DIR)/etc/passwd; } && \
 		mkdir -p $(INITRD_DIR)/var/xen/vncterm; \
 	fi
+	# Stats for XO: xcp-rrdd and its cpu and squeezed (memory) plugins
+	# (xen-api), installed when built
+	if [ -x $(XENOPSD_DIR)/xcp-rrdd ] && [ -x $(XENOPSD_DIR)/xcp-rrdd-cpu ] && [ -x $(XENOPSD_DIR)/xcp-rrdd-squeezed ]; then \
+		install -D -m 755 $(XENOPSD_DIR)/xcp-rrdd $(INITRD_DIR)/usr/sbin/xcp-rrdd && \
+		install -D -m 644 $(XENOPSD_DIR)/xcp-rrdd.conf $(INITRD_DIR)/etc/xcp-rrdd.conf && \
+		install -D -m 755 $(XENOPSD_DIR)/xcp-rrdd-cpu $(INITRD_DIR)/opt/xensource/libexec/xcp-rrdd-plugins/xcp-rrdd-cpu && \
+		install -D -m 755 $(XENOPSD_DIR)/xcp-rrdd-squeezed $(INITRD_DIR)/opt/xensource/libexec/xcp-rrdd-plugins/xcp-rrdd-squeezed; \
+	fi
 	# ponytail: directories xapi requires at start-up, left empty (xen-cmdline
 	# is only access()-checked)
 	mkdir -p $(INITRD_DIR)/opt/xensource/sm $(INITRD_DIR)/opt/xensource/www \
@@ -258,7 +266,19 @@ initrd-tools: install create-tools-dirs xenopsd-files ## Create initrd with Xen 
 	'    # default cert: serve the pool one on 443 instead' \
 	'    timeout 120 /opt/xensource/libexec/gencert /etc/xensource/xapi-ssl.pem -1 default ||' \
 	'        cp /etc/xensource/xapi-pool-tls.pem /etc/xensource/xapi-ssl.pem' \
+	'    # xcp-rrdd before xapi, as xcp-rrdd.service orders it; plugins write' \
+	'    # their metrics to /dev/shm/metrics (xcp-rrdd-tmp)' \
+	'    if [ -x /usr/sbin/xcp-rrdd ]; then' \
+	'        mkdir -p /dev/shm && mount -t tmpfs tmpfs /dev/shm 2>/dev/null; mkdir -p /dev/shm/metrics' \
+	'        xcp-rrdd > /var/log/xcp-rrdd.log 2>&1 &' \
+	'        sleep 2' \
+	'    fi' \
 	'    xapi > /var/log/xapi.log 2>&1 &' \
+	'    if [ -x /usr/sbin/xcp-rrdd ]; then' \
+	'        P=/opt/xensource/libexec/xcp-rrdd-plugins' \
+	'        $$P/xcp-rrdd-cpu > /var/log/xcp-rrdd-cpu.log 2>&1 &' \
+	'        $$P/xcp-rrdd-squeezed > /var/log/xcp-rrdd-squeezed.log 2>&1 &' \
+	'    fi' \
 	'    # dom0 console: xapi hands websocket consoles to wsproxy, which' \
 	'    # connects to vncterm on 127.0.0.1:5900 (host_console_vncport)' \
 	'    if [ -x /usr/libexec/xapi/wsproxy ]; then' \
