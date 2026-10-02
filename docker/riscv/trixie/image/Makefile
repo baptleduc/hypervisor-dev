@@ -192,7 +192,8 @@ ifneq ($(wildcard $(XENOPSD_DIR)/xapi),)
 		install -D -m 644 $(XENOPSD_DIR)/keymaps/en-us $(INITRD_DIR)/usr/share/qemu/keymaps/en-us && \
 		printf '%s\n' '#!/bin/sh' 'clear' 'if [ -x /bin/login ]; then exec /bin/login root; fi' 'exec /bin/sh' \
 			> $(INITRD_DIR)/opt/xensource/libexec/dom0term.sh && \
-		chmod 755 $(INITRD_DIR)/opt/xensource/libexec/dom0term.sh; \
+		chmod 755 $(INITRD_DIR)/opt/xensource/libexec/dom0term.sh && \
+		install -d -m 700 $(INITRD_DIR)/root; \
 	fi
 	# ponytail: directories xapi requires at start-up, left empty (xen-cmdline
 	# is only access()-checked)
