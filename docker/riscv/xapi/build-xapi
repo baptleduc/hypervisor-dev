@@ -1,8 +1,8 @@
 #!/bin/sh
-# Build xapi, xe, squeezed, v6d, xcp-networkd, xenopsd-xc, xenopsd-cli and
-# forkexecd (xenopsd spawns xenguest through it) from /build/xen-api against
-# the Xen tree mounted at /build/xen (tools already built by
-# xen-riscv64-trixie).
+# Build xapi, xe, gencert, squeezed, v6d, xcp-networkd, xenopsd-xc,
+# xenopsd-cli and forkexecd (xenopsd spawns xenguest through it) from
+# /build/xen-api against the Xen tree mounted at /build/xen (tools already
+# built by xen-riscv64-trixie).
 set -e
 
 XEN=${XEN:-/build/xen}
@@ -54,6 +54,7 @@ dune build --profile=release \
     ocaml/forkexecd/src/fe_main.exe \
     ocaml/xapi/xapi_main.exe \
     ocaml/xe-cli/newcli.exe \
+    ocaml/gencert/gencert.exe \
     ocaml/squeezed/src/squeezed.exe \
     ocaml/xcp-featured/bin/xcp_featured.exe \
     ocaml/networkd/bin/networkd.exe
@@ -68,6 +69,7 @@ install -s -m 755 _build/default/ocaml/forkexecd/src/fe_main.exe $OUT/forkexecd
 install -m 755 ocaml/forkexecd/helper/vfork_helper $OUT/vfork_helper
 install -s -m 755 _build/default/ocaml/xapi/xapi_main.exe $OUT/xapi
 install -s -m 755 _build/default/ocaml/xe-cli/newcli.exe $OUT/xe
+install -s -m 755 _build/default/ocaml/gencert/gencert.exe $OUT/gencert
 install -s -m 755 _build/default/ocaml/squeezed/src/squeezed.exe $OUT/squeezed
 install -s -m 755 _build/default/ocaml/xcp-featured/bin/xcp_featured.exe $OUT/v6d
 install -s -m 755 _build/default/ocaml/networkd/bin/networkd.exe $OUT/xcp-networkd
