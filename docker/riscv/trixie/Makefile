@@ -35,7 +35,7 @@ DOCKER += -v "$(KERNEL)":/build/kernel/Image.gz \
           -e "KERNEL=/build/kernel/Image.gz"
 endif
 
-# Mount xen-api so initrd-tools picks up xenopsd (built by docker/riscv/xenopsd)
+# Mount xen-api so initrd-tools picks up xenopsd (built by docker/riscv/xapi)
 ifdef XEN_API_SRC
 DOCKER += -v "$(XEN_API_SRC)":/build/xen-api
 endif

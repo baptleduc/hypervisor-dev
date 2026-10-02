@@ -22,6 +22,6 @@ XEN_SRC := $(HOME)/Documents/Vates/xen
 # VMLINUX := $(HOME)/Documents/Vates/linux-fork/vmlinux
 
 # Path to the xen-api tree (optional). When set and xenopsd has been built in
-# it (docker/riscv/xenopsd), initrd-tools adds xenopsd-xc, xenopsd-cli and
+# it (docker/riscv/xapi), initrd-tools adds xenopsd-xc, xenopsd-cli and
 # forkexecd to dom0.
 # XEN_API_SRC := $(HOME)/Documents/Vates/xen-api

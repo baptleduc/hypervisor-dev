@@ -1,6 +1,6 @@
 #!/bin/sh
-# Build xenopsd-xc, xenopsd-cli and forkexecd (xenopsd spawns xenguest
-# through it) from /build/xen-api against the Xen tree
+# Build xapi, xe, xenopsd-xc, xenopsd-cli and forkexecd (xenopsd spawns
+# xenguest through it) from /build/xen-api against the Xen tree
 # mounted at /build/xen (tools already built by xen-riscv64-trixie).
 set -e
 
@@ -40,7 +40,9 @@ cd /build/xen-api
 dune build --profile=release \
     ocaml/xenopsd/xc/xenops_xc_main.exe \
     ocaml/xenopsd/cli/main.exe \
-    ocaml/forkexecd/src/fe_main.exe
+    ocaml/forkexecd/src/fe_main.exe \
+    ocaml/xapi/xapi_main.exe \
+    ocaml/xe-cli/newcli.exe
 # forkexecd spawns everything through this C helper, not built by dune
 make -C ocaml/forkexecd/helper vfork_helper
 
@@ -49,4 +51,10 @@ install -m 755 _build/default/ocaml/xenopsd/xc/xenops_xc_main.exe $OUT/xenopsd-x
 install -m 755 _build/default/ocaml/xenopsd/cli/main.exe $OUT/xenopsd-cli
 install -m 755 _build/default/ocaml/forkexecd/src/fe_main.exe $OUT/forkexecd
 install -m 755 ocaml/forkexecd/helper/vfork_helper $OUT/vfork_helper
+install -m 755 _build/default/ocaml/xapi/xapi_main.exe $OUT/xapi
+install -m 755 _build/default/ocaml/xe-cli/newcli.exe $OUT/xe
+# Config files xapi requires at start-up
+install -m 644 scripts/pool.conf $OUT/pool.conf
+install -m 644 scripts/db.conf.skel $OUT/db.conf
+install -m 644 scripts/udhcpd.skel $OUT/udhcpd.skel
 echo "built into $OUT"
