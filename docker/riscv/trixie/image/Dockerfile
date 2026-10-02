@@ -120,6 +120,8 @@ DEPS=(
     # stunnel, xapi's TLS front end on port 443, and openssl, which gencert
     # runs to make its key
     libssl3t64:riscv64 libsystemd0:riscv64 libwrap0:riscv64
+    # pam_unix, for xapi's root password check
+    libselinux1:riscv64 libpcre2-8-0:riscv64
     # xcp-networkd dlopen()s these, so they are not in its NEEDED list
     libnl-3-200:riscv64 libnl-route-3-200:riscv64 libffi8:riscv64
     # Tools
@@ -145,7 +147,13 @@ dpkg-deb -x stunnel4_*_riscv64.deb /tmp/riscv64
 dpkg-deb -x openssl_*_riscv64.deb /tmp/riscv64
 install -D /tmp/riscv64/usr/bin/stunnel4 /opt/riscv64/stunnel
 install -D /tmp/riscv64/usr/bin/openssl /opt/riscv64/openssl
-rm -rf stunnel4_*_riscv64.deb openssl_*_riscv64.deb /tmp/riscv64
+# pam_unix checks the password through its unix_chkpwd helper, even as root
+apt-get download libpam-modules:riscv64 libpam-modules-bin:riscv64
+dpkg-deb -x libpam-modules_*_riscv64.deb /tmp/riscv64
+dpkg-deb -x libpam-modules-bin_*_riscv64.deb /tmp/riscv64
+install -D /tmp/riscv64/usr/lib/riscv64-linux-gnu/security/pam_unix.so /opt/riscv64/pam_unix.so
+install -D /tmp/riscv64/usr/sbin/unix_chkpwd /opt/riscv64/unix_chkpwd
+rm -rf stunnel4_*_riscv64.deb openssl_*_riscv64.deb libpam-modules*_riscv64.deb /tmp/riscv64
 cd -
 
 rm -rf /var/lib/apt/lists/*
@@ -185,11 +193,15 @@ RUN mkdir -p lib && \
                /usr/lib/riscv64-linux-gnu/libssl.so.3 \
                /usr/lib/riscv64-linux-gnu/libcrypto.so.3 \
                /usr/lib/riscv64-linux-gnu/libsystemd.so.0 \
-               /usr/lib/riscv64-linux-gnu/libwrap.so.0; do \
+               /usr/lib/riscv64-linux-gnu/libwrap.so.0 \
+               /usr/lib/riscv64-linux-gnu/libselinux.so.1 \
+               /usr/lib/riscv64-linux-gnu/libpcre2-8.so.0; do \
         cp "$lib" ./lib/; \
     done && \
     install -D /opt/riscv64/stunnel ./usr/bin/stunnel && \
-    install -D /opt/riscv64/openssl ./usr/bin/openssl
+    install -D /opt/riscv64/openssl ./usr/bin/openssl && \
+    install -D /opt/riscv64/pam_unix.so ./lib/security/pam_unix.so && \
+    install -D /opt/riscv64/unix_chkpwd ./usr/sbin/unix_chkpwd
 
 RUN --mount=type=bind,from=dtc-riscv64,source=/dtc-install,target=/dtc-stage \
     if [ "${DEBUG_XL}" = "1" ]; then \
@@ -227,7 +239,12 @@ COPY --from=qemu-aia-riscv64 \
 COPY xl.conf domu.cfg .config \
      xenopsd-xc.conf xenopsd-stub riscv.cfg xapi.conf squeezed.conf v6d.conf \
      xcp-networkd.conf gen-xensource-inventory xe-vm-from-cfg systemctl \
+     pam.d-xapi passwd \
      ${CONFIGS_DIR}/
+# dom0 root password, checked by xapi (xe -pw, Xen Orchestra) through PAM
+ARG ROOT_PASSWORD=vates123
+RUN printf 'root:%s:19000:0:99999:7:::\n' "$(openssl passwd -6 "$ROOT_PASSWORD")" \
+        > ${CONFIGS_DIR}/shadow
 COPY Makefile .
 COPY generate_dtb.sh ${DTB_DIR}/
 

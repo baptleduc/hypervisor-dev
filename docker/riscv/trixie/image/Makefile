@@ -167,6 +167,9 @@ ifneq ($(wildcard $(XENOPSD_DIR)/xapi),)
 	install -D -m 755 $(XENOPSD_DIR)/xe $(INITRD_DIR)/usr/bin/xe
 	install -D -m 755 $(XENOPSD_DIR)/gencert $(INITRD_DIR)/opt/xensource/libexec/gencert
 	install -D -m 755 $(CONFIGS_DIR)/systemctl $(INITRD_DIR)/usr/libexec/systemctl
+	install -D -m 644 $(CONFIGS_DIR)/pam.d-xapi $(INITRD_DIR)/etc/pam.d/xapi
+	install -D -m 644 $(CONFIGS_DIR)/passwd $(INITRD_DIR)/etc/passwd
+	install -D -m 600 $(CONFIGS_DIR)/shadow $(INITRD_DIR)/etc/shadow
 	mkdir -p $(INITRD_DIR)/etc/stunnel
 	install -D -m 755 $(CONFIGS_DIR)/xe-vm-from-cfg $(INITRD_DIR)/usr/bin/xe-vm-from-cfg
 	install -D -m 644 $(CONFIGS_DIR)/xapi.conf $(INITRD_DIR)/etc/xapi.conf

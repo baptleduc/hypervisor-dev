@@ -1,0 +1,5 @@
+#%PAM-1.0
+# xapi's login check (service "xapi"), straight to /etc/shadow
+auth     required /lib/security/pam_unix.so
+account  required /lib/security/pam_unix.so
+password required /lib/security/pam_unix.so sha512
