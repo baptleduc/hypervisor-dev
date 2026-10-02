@@ -163,6 +163,9 @@ ifneq ($(wildcard $(XENOPSD_DIR)/xenopsd-xc),)
 ifneq ($(wildcard $(XENOPSD_DIR)/xapi),)
 	install -D -m 755 $(XENOPSD_DIR)/xapi $(INITRD_DIR)/usr/sbin/xapi
 	install -D -m 755 $(XENOPSD_DIR)/xe $(INITRD_DIR)/usr/bin/xe
+	install -D -m 755 $(XENOPSD_DIR)/gencert $(INITRD_DIR)/opt/xensource/libexec/gencert
+	install -D -m 755 $(CONFIGS_DIR)/systemctl $(INITRD_DIR)/usr/libexec/systemctl
+	mkdir -p $(INITRD_DIR)/etc/stunnel
 	install -D -m 755 $(CONFIGS_DIR)/xe-vm-from-cfg $(INITRD_DIR)/usr/bin/xe-vm-from-cfg
 	install -D -m 644 $(CONFIGS_DIR)/xapi.conf $(INITRD_DIR)/etc/xapi.conf
 	install -D -m 755 $(XENOPSD_DIR)/squeezed $(INITRD_DIR)/usr/sbin/squeezed
@@ -196,6 +199,8 @@ initrd-tools: install create-tools-dirs xenopsd-files ## Create initrd with Xen 
 	'mkdir -p /dev/pts/' \
 	'mount -t devpts devpts /dev/pts' \
 	'mount -t sysfs sysfs /sys' \
+	'# xapi listens on 127.0.0.1:80 behind stunnel' \
+	'ip link set lo up' \
 	'export LIBXL_DEBUG_DUMP_DTB="/var/log/xen/debug_dump_dt.dtb"' \
 	'xenstored' \
 	'xenconsoled -vvvv' \
@@ -215,6 +220,11 @@ initrd-tools: install create-tools-dirs xenopsd-files ## Create initrd with Xen 
 	'    squeezed > /var/log/squeezed.log 2>&1 &' \
 	'    v6d > /var/log/v6d.log 2>&1 &' \
 	'    xcp-networkd > /var/log/xcp-networkd.log 2>&1 &' \
+	'    /opt/xensource/libexec/gencert /etc/xensource/xapi-pool-tls.pem -1 xapi:pool' \
+	'    # ponytail: no dom0 NIC, so no management IP for the default cert:' \
+	'    # serve the pool one on 443 until networking lands' \
+	'    /opt/xensource/libexec/gencert /etc/xensource/xapi-ssl.pem -1 default ||' \
+	'        cp /etc/xensource/xapi-pool-tls.pem /etc/xensource/xapi-ssl.pem' \
 	'    xapi > /var/log/xapi.log 2>&1 &' \
 	'fi' \
 	'exec /bin/sh' \

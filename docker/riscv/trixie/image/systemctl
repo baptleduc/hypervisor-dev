@@ -1,0 +1,21 @@
+#!/bin/sh
+# systemctl stand-in for xapi: the initrd dom0 has no systemd. stunnel@xapi,
+# xapi's TLS front end, is run for real from the /etc/stunnel/xapi.conf
+# xapi writes; every other unit is a no-op.
+[ "$2" = stunnel@xapi ] || exit 0
+
+pidfile=/var/run/xapissl.pid
+
+stop() {
+    [ -f $pidfile ] || return 0
+    pid=$(cat $pidfile)
+    kill "$pid" 2>/dev/null
+    while kill -0 "$pid" 2>/dev/null; do sleep 0.1; done
+    rm -f $pidfile
+}
+
+case $1 in
+is-enabled) echo enabled ;;
+start|restart|reload-or-restart) stop; exec stunnel /etc/stunnel/xapi.conf ;;
+stop) stop ;;
+esac

@@ -105,6 +105,9 @@ DEPS=(
     libxxhash0:riscv64 libpci3:riscv64 libpam0g:riscv64 libcrypt1:riscv64
     libgmp10:riscv64 libudev1:riscv64 libaudit1:riscv64 libcap2:riscv64
     libcap-ng0:riscv64
+    # stunnel, xapi's TLS front end on port 443, and openssl, which gencert
+    # runs to make its key
+    libssl3t64:riscv64 libsystemd0:riscv64 libwrap0:riscv64
     # xcp-networkd dlopen()s these, so they are not in its NEEDED list
     libnl-3-200:riscv64 libnl-route-3-200:riscv64 libffi8:riscv64
     # Tools
@@ -123,6 +126,14 @@ cd /tmp
 apt-get download ocaml:riscv64
 dpkg-deb -x ocaml_*_riscv64.deb /
 rm ocaml_*_riscv64.deb
+# Same for stunnel4:riscv64 and openssl:riscv64, which would replace their
+# amd64 counterparts: only their binaries go in the initrd
+apt-get download stunnel4:riscv64 openssl:riscv64
+dpkg-deb -x stunnel4_*_riscv64.deb /tmp/riscv64
+dpkg-deb -x openssl_*_riscv64.deb /tmp/riscv64
+install -D /tmp/riscv64/usr/bin/stunnel4 /opt/riscv64/stunnel
+install -D /tmp/riscv64/usr/bin/openssl /opt/riscv64/openssl
+rm -rf stunnel4_*_riscv64.deb openssl_*_riscv64.deb /tmp/riscv64
 cd -
 
 rm -rf /var/lib/apt/lists/*
@@ -158,9 +169,15 @@ RUN mkdir -p lib && \
                /usr/lib/riscv64-linux-gnu/libcap-ng.so.0 \
                /usr/lib/riscv64-linux-gnu/libnl-3.so.200 \
                /usr/lib/riscv64-linux-gnu/libnl-route-3.so.200 \
-               /usr/lib/riscv64-linux-gnu/libffi.so.8; do \
+               /usr/lib/riscv64-linux-gnu/libffi.so.8 \
+               /usr/lib/riscv64-linux-gnu/libssl.so.3 \
+               /usr/lib/riscv64-linux-gnu/libcrypto.so.3 \
+               /usr/lib/riscv64-linux-gnu/libsystemd.so.0 \
+               /usr/lib/riscv64-linux-gnu/libwrap.so.0; do \
         cp "$lib" ./lib/; \
-    done
+    done && \
+    install -D /opt/riscv64/stunnel ./usr/bin/stunnel && \
+    install -D /opt/riscv64/openssl ./usr/bin/openssl
 
 RUN --mount=type=bind,from=dtc-riscv64,source=/dtc-install,target=/dtc-stage \
     if [ "${DEBUG_XL}" = "1" ]; then \
@@ -196,7 +213,7 @@ COPY --from=qemu-aia-riscv64 \
 # Local files
 COPY xl.conf domu.cfg .config \
      xenopsd-xc.conf xenopsd-stub riscv.cfg xapi.conf squeezed.conf v6d.conf \
-     xcp-networkd.conf gen-xensource-inventory xe-vm-from-cfg \
+     xcp-networkd.conf gen-xensource-inventory xe-vm-from-cfg systemctl \
      ${CONFIGS_DIR}/
 COPY Makefile .
 COPY generate_dtb.sh ${DTB_DIR}/
