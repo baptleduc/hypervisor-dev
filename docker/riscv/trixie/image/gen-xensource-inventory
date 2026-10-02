@@ -1,0 +1,13 @@
+#!/bin/sh
+# Write the minimal /etc/xensource-inventory xapi needs, before
+# xen-init-dom0 runs, so that dom0's Xen handle matches xapi's
+# CONTROL_DOMAIN_UUID. The initrd is rebuilt every boot, so are the UUIDs.
+f=/etc/xensource-inventory
+[ -f $f ] && exit 0
+cat > $f <<EOF
+INSTALLATION_UUID='$(cat /proc/sys/kernel/random/uuid)'
+CONTROL_DOMAIN_UUID='$(cat /proc/sys/kernel/random/uuid)'
+MANAGEMENT_INTERFACE=''
+MANAGEMENT_ADDRESS_TYPE='IPv4'
+BUILD_NUMBER='0'
+EOF

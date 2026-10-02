@@ -21,7 +21,7 @@ XEN_CONFIGURE_OUT := $(XEN_ROOT)/config/Paths.mk
 
 GDB?=/usr/bin/gdb-multiarch
 
-# xenopsd-xc, xenopsd-cli and forkexecd built by docker/riscv/xenopsd,
+# xenopsd-xc, xenopsd-cli and forkexecd built by docker/riscv/xapi,
 # picked up when xen-api is mounted at $(BUILD_DIR)/xen-api
 XENOPSD_DIR ?= $(BUILD_DIR)/xen-api/_riscv
 
@@ -160,8 +160,23 @@ ifneq ($(wildcard $(XENOPSD_DIR)/xenopsd-xc),)
 	mkdir -p $(INITRD_DIR)/etc/xcp $(INITRD_DIR)/var/lib/xcp $(INITRD_DIR)/var/xapi/forker \
 		$(INITRD_DIR)/var/run/nonpersistent/forkexecd $(INITRD_DIR)/var/log
 	echo bridge > $(INITRD_DIR)/etc/xcp/network.conf
+ifneq ($(wildcard $(XENOPSD_DIR)/xapi),)
+	install -D -m 755 $(XENOPSD_DIR)/xapi $(INITRD_DIR)/usr/sbin/xapi
+	install -D -m 755 $(XENOPSD_DIR)/xe $(INITRD_DIR)/usr/bin/xe
+	install -D -m 644 $(CONFIGS_DIR)/xapi.conf $(INITRD_DIR)/etc/xapi.conf
+	install -D -m 755 $(CONFIGS_DIR)/gen-xensource-inventory $(INITRD_DIR)/usr/libexec/gen-xensource-inventory
+	install -D -m 644 $(XENOPSD_DIR)/pool.conf $(INITRD_DIR)/etc/xensource/pool.conf
+	install -D -m 644 $(XENOPSD_DIR)/db.conf $(INITRD_DIR)/etc/xensource/db.conf
+	install -D -m 644 $(XENOPSD_DIR)/udhcpd.skel $(INITRD_DIR)/etc/xensource/udhcpd.skel
+	# ponytail: directories xapi requires at start-up, left empty (xen-cmdline
+	# is only access()-checked)
+	mkdir -p $(INITRD_DIR)/opt/xensource/sm $(INITRD_DIR)/opt/xensource/www \
+		$(INITRD_DIR)/usr/libexec/xapi/cluster-stack \
+		$(INITRD_DIR)/opt/xensource/libexec/xen-cmdline $(INITRD_DIR)/opt/xensource/gpg \
+		$(INITRD_DIR)/opt/xensource/packages/post-install-scripts
+endif
 else
-	@echo "No xenopsd in $(XENOPSD_DIR), skipping (mount xen-api, see docker/riscv/xenopsd)"
+	@echo "No xenopsd in $(XENOPSD_DIR), skipping (mount xen-api, see docker/riscv/xapi)"
 endif
 
 initrd-tools: install create-tools-dirs xenopsd-files ## Create initrd with Xen tools included
@@ -178,12 +193,19 @@ initrd-tools: install create-tools-dirs xenopsd-files ## Create initrd with Xen 
 	'xenstored' \
 	'xenconsoled -vvvv' \
 	'sleep 0.5' \
-	'/usr/lib/xen/bin/xen-init-dom0' \
+	'if [ -x /usr/sbin/xapi ]; then' \
+	'    /usr/libexec/gen-xensource-inventory' \
+	'    . /etc/xensource-inventory' \
+	'fi' \
+	'/usr/lib/xen/bin/xen-init-dom0 $$CONTROL_DOMAIN_UUID' \
 	'if [ -x /usr/sbin/xenopsd-xc ]; then' \
 	'    syslogd -O /var/log/messages' \
 	'    mount -t cgroup2 none /sys/fs/cgroup' \
 	'    forkexecd > /var/log/forkexecd.log 2>&1 &' \
 	'    xenopsd-xc > /var/log/xenopsd.log 2>&1 &' \
+	'fi' \
+	'if [ -x /usr/sbin/xapi ]; then' \
+	'    xapi > /var/log/xapi.log 2>&1 &' \
 	'fi' \
 	'exec /bin/sh' \
 	> $(RCS_FILE) && \
