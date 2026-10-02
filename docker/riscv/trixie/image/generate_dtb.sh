@@ -46,8 +46,8 @@ get_platform_val() {
 remove_unsupported_nodes() {
     local dts_name="$1.dts"
 
-    # Virtio and PCI isn't supported now
-    awk '/virtio[^;]*{|pci[^;]*{/ {f=1} f && /};/ {f=0; next} !f' ${dts_name} > ${dts_name}_ && mv ${dts_name}_ ${dts_name}
+    # PCI isn't supported now; virtio-mmio is, for dom0's NIC
+    awk '/pci[^;]*{/ {f=1} f && /};/ {f=0; next} !f' ${dts_name} > ${dts_name}_ && mv ${dts_name}_ ${dts_name}
 }
 
 generate_base_dts() {

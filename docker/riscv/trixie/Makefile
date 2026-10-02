@@ -90,8 +90,8 @@ build-image-debug: ## Build the Docker image with debug tools (gdb) included
 shell: ## Open an interactive shell in the container
 	$(DOCKER) -p 1234:1234 $(IMAGE) /bin/bash
 
-run: ## Boot Xen + dom0 in QEMU
-	$(DOCKER) -p 1234:1234 $(IMAGE) \
+run: ## Boot Xen + dom0 in QEMU, xapi reachable on host port 443
+	$(DOCKER) -p 1234:1234 -p 443:443 $(IMAGE) \
 		/bin/bash -c "make $(INITRD) && make go"
 
 # Mount the local image/ scripts so the target works without rebuilding the image.

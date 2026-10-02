@@ -7,7 +7,7 @@ f=/etc/xensource-inventory
 cat > $f <<EOF
 INSTALLATION_UUID='$(cat /proc/sys/kernel/random/uuid)'
 CONTROL_DOMAIN_UUID='$(cat /proc/sys/kernel/random/uuid)'
-MANAGEMENT_INTERFACE=''
+MANAGEMENT_INTERFACE='$([ -e /sys/class/net/eth0 ] && echo eth0)'
 MANAGEMENT_ADDRESS_TYPE='IPv4'
 BUILD_NUMBER='0'
 EOF

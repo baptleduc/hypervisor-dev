@@ -39,6 +39,8 @@ QEMU_COMMON_FLAGS = \
 	-device loader,file=$(KERNEL),addr=0x808ef000
 
 QEMU_BASE_FLAGS = $(QEMU_COMMON_FLAGS) \
+	-netdev user,id=net0,hostfwd=tcp::443-:443 \
+	-device virtio-net-device,netdev=net0 \
 	-device loader,file=$(INITRD),addr=0xe0000000 \
 	-dtb $(DTB_DIR)/dom0-qemu-virt.dtb
 
@@ -201,6 +203,13 @@ initrd-tools: install create-tools-dirs xenopsd-files ## Create initrd with Xen 
 	'mount -t sysfs sysfs /sys' \
 	'# xapi listens on 127.0.0.1:80 behind stunnel' \
 	'ip link set lo up' \
+	'# ponytail: QEMU user networking always hands out 10.0.2.15, so no' \
+	'# DHCP client; use udhcpc once dom0 runs on other networks' \
+	'if [ -e /sys/class/net/eth0 ]; then' \
+	'    ip link set eth0 up' \
+	'    ip addr add 10.0.2.15/24 dev eth0' \
+	'    ip route add default via 10.0.2.2' \
+	'fi' \
 	'export LIBXL_DEBUG_DUMP_DTB="/var/log/xen/debug_dump_dt.dtb"' \
 	'xenstored' \
 	'xenconsoled -vvvv' \
@@ -221,9 +230,12 @@ initrd-tools: install create-tools-dirs xenopsd-files ## Create initrd with Xen 
 	'    v6d > /var/log/v6d.log 2>&1 &' \
 	'    xcp-networkd > /var/log/xcp-networkd.log 2>&1 &' \
 	'    /opt/xensource/libexec/gencert /etc/xensource/xapi-pool-tls.pem -1 xapi:pool' \
-	'    # ponytail: no dom0 NIC, so no management IP for the default cert:' \
-	'    # serve the pool one on 443 until networking lands' \
-	'    /opt/xensource/libexec/gencert /etc/xensource/xapi-ssl.pem -1 default ||' \
+	'    # The default cert asks xcp-networkd for the management IP: wait for' \
+	'    # it, and bound the call so a stuck networkd cannot block the boot' \
+	'    i=0; while [ ! -S /var/lib/xcp/networkd ] && [ $$i -lt 120 ]; do sleep 1; i=$$((i+1)); done' \
+	'    # ponytail: without a dom0 NIC there is no management IP for the' \
+	'    # default cert: serve the pool one on 443 instead' \
+	'    timeout 120 /opt/xensource/libexec/gencert /etc/xensource/xapi-ssl.pem -1 default ||' \
 	'        cp /etc/xensource/xapi-pool-tls.pem /etc/xensource/xapi-ssl.pem' \
 	'    xapi > /var/log/xapi.log 2>&1 &' \
 	'fi' \
