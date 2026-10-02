@@ -163,6 +163,7 @@ ifneq ($(wildcard $(XENOPSD_DIR)/xenopsd-xc),)
 ifneq ($(wildcard $(XENOPSD_DIR)/xapi),)
 	install -D -m 755 $(XENOPSD_DIR)/xapi $(INITRD_DIR)/usr/sbin/xapi
 	install -D -m 755 $(XENOPSD_DIR)/xe $(INITRD_DIR)/usr/bin/xe
+	install -D -m 755 $(CONFIGS_DIR)/xe-vm-from-cfg $(INITRD_DIR)/usr/bin/xe-vm-from-cfg
 	install -D -m 644 $(CONFIGS_DIR)/xapi.conf $(INITRD_DIR)/etc/xapi.conf
 	install -D -m 755 $(XENOPSD_DIR)/squeezed $(INITRD_DIR)/usr/sbin/squeezed
 	install -D -m 644 $(CONFIGS_DIR)/squeezed.conf $(INITRD_DIR)/etc/squeezed.conf

@@ -1,0 +1,25 @@
+#!/bin/sh
+# Create a xapi VM from a xenopsd-cli config (key = "value" lines) and
+# print its UUID: xe-vm-from-cfg /domu/riscv.cfg && xe vm-start uuid=...
+set -e
+cfg=${1:?usage: $0 <xenopsd-cli config>}
+
+# key = "value" -> key="value", then source it
+eval "$(sed -n 's/^\([a-z_]*\) *= *\(.*\)$/\1=\2/p' "$cfg")"
+
+# xapi only boots kernels and ramdisks from this directory
+guest=/var/lib/xcp/guest
+mkdir -p $guest
+cp "$kernel" $guest/
+[ -n "$ramdisk" ] && cp "$ramdisk" $guest/
+
+vm=$(xe vm-create name-label="$name")
+xe vm-param-set uuid=$vm domain-type="${builder:-riscv}" PV-bootloader="" \
+    PV-kernel=$guest/$(basename "$kernel") \
+    PV-ramdisk=${ramdisk:+$guest/$(basename "$ramdisk")} \
+    PV-args="$root"
+xe vm-memory-limits-set uuid=$vm static-min=${memory}MiB \
+    dynamic-min=${memory}MiB dynamic-max=${memory}MiB static-max=${memory}MiB
+xe vm-param-set uuid=$vm VCPUs-max=${vcpus:-1}
+xe vm-param-set uuid=$vm VCPUs-at-startup=${vcpus:-1}
+echo $vm

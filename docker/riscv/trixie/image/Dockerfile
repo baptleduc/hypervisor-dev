@@ -196,7 +196,7 @@ COPY --from=qemu-aia-riscv64 \
 # Local files
 COPY xl.conf domu.cfg .config \
      xenopsd-xc.conf xenopsd-stub riscv.cfg xapi.conf squeezed.conf v6d.conf \
-     xcp-networkd.conf gen-xensource-inventory \
+     xcp-networkd.conf gen-xensource-inventory xe-vm-from-cfg \
      ${CONFIGS_DIR}/
 COPY Makefile .
 COPY generate_dtb.sh ${DTB_DIR}/
