@@ -189,6 +189,7 @@ ifneq ($(wildcard $(XENOPSD_DIR)/xapi),)
 		install -D -m 755 $(XENOPSD_DIR)/wsproxy $(INITRD_DIR)/usr/libexec/xapi/wsproxy && \
 		install -D -m 755 $(XENOPSD_DIR)/sockexec $(INITRD_DIR)/usr/libexec/xapi/sockexec && \
 		install -D -m 755 $(XENOPSD_DIR)/vncterm $(INITRD_DIR)/usr/lib/xen/bin/vncterm && \
+		install -D -m 644 $(XENOPSD_DIR)/keymaps/en-us $(INITRD_DIR)/usr/share/qemu/keymaps/en-us && \
 		printf '%s\n' '#!/bin/sh' 'clear' 'if [ -x /bin/login ]; then exec /bin/login root; fi' 'exec /bin/sh' \
 			> $(INITRD_DIR)/opt/xensource/libexec/dom0term.sh && \
 		chmod 755 $(INITRD_DIR)/opt/xensource/libexec/dom0term.sh; \
