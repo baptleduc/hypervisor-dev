@@ -35,6 +35,11 @@ DOCKER += -v "$(KERNEL)":/build/kernel/Image.gz \
           -e "KERNEL=/build/kernel/Image.gz"
 endif
 
+# Mount xen-api so initrd-tools picks up xenopsd (built by docker/riscv/xenopsd)
+ifdef XEN_API_SRC
+DOCKER += -v "$(XEN_API_SRC)":/build/xen-api
+endif
+
 # Mount vmlinux for GDB kernel symbol loading
 ifdef VMLINUX
 ifeq ($(wildcard $(VMLINUX)),)

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Stand-in for tools xenopsd requires but a diskless, VIF-less guest never uses
+exit 0

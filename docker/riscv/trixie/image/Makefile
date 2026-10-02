@@ -21,6 +21,10 @@ XEN_CONFIGURE_OUT := $(XEN_ROOT)/config/Paths.mk
 
 GDB?=/usr/bin/gdb-multiarch
 
+# xenopsd-xc, xenopsd-cli and forkexecd built by docker/riscv/xenopsd,
+# picked up when xen-api is mounted at $(BUILD_DIR)/xen-api
+XENOPSD_DIR ?= $(BUILD_DIR)/xen-api/_riscv
+
 INITRD_STAMP := .stamp_initrd_with_tools
 XEN_MAKE := $(MAKE) -C $(XEN_ROOT) -j$(nproc)
 
@@ -64,7 +68,7 @@ GDB_ARGS += \
 	-ex "b start_xen" \
 	-ex "c"
 
-.PHONY: all clean help initrd-tools install-tools install-xen install build-tools build-xen build go go-debug go-dom0less gdb initrd create-common-dirs create-tools-dirs
+.PHONY: all clean help xenopsd-files initrd-tools install-tools install-xen install build-tools build-xen build go go-debug go-dom0less gdb initrd create-common-dirs create-tools-dirs
 
 help: ## Display this help message
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | \
@@ -144,7 +148,23 @@ initrd: $(INITRD_STAMP) install-xen create-common-dirs ## Create basic initrd im
 	cp $(RCS_FILE) $(INITRD_DIR)/etc/init.d/
 	genext2fs -b 10000 -N 1024 -U -d $(INITRD_DIR)/ $(INITRD)
 
-initrd-tools: install create-tools-dirs ## Create initrd with Xen tools included
+xenopsd-files: create-tools-dirs ## Install xenopsd, xenopsd-cli and forkexecd into INITRD_DIR if built
+ifneq ($(wildcard $(XENOPSD_DIR)/xenopsd-xc),)
+	install -D -m 755 $(XENOPSD_DIR)/xenopsd-xc $(INITRD_DIR)/usr/sbin/xenopsd-xc
+	install -D -m 755 $(XENOPSD_DIR)/forkexecd $(INITRD_DIR)/usr/sbin/forkexecd
+	install -D -m 755 $(XENOPSD_DIR)/vfork_helper $(INITRD_DIR)/usr/libexec/xapi/vfork_helper
+	install -D -m 755 $(XENOPSD_DIR)/xenopsd-cli $(INITRD_DIR)/usr/bin/xenopsd-cli
+	install -D -m 644 $(CONFIGS_DIR)/xenopsd-xc.conf $(INITRD_DIR)/etc/xenopsd-xc.conf
+	install -D -m 755 $(CONFIGS_DIR)/xenopsd-stub $(INITRD_DIR)/usr/libexec/xenopsd-stub
+	install -D -m 644 $(CONFIGS_DIR)/riscv.cfg $(INITRD_DIR)/domu/riscv.cfg
+	mkdir -p $(INITRD_DIR)/etc/xcp $(INITRD_DIR)/var/lib/xcp $(INITRD_DIR)/var/xapi/forker \
+		$(INITRD_DIR)/var/run/nonpersistent/forkexecd $(INITRD_DIR)/var/log
+	echo bridge > $(INITRD_DIR)/etc/xcp/network.conf
+else
+	@echo "No xenopsd in $(XENOPSD_DIR), skipping (mount xen-api, see docker/riscv/xenopsd)"
+endif
+
+initrd-tools: install create-tools-dirs xenopsd-files ## Create initrd with Xen tools included
 	echo "Building initrd with tools image"
 	printf '%s\n' \
 	'#!/bin/sh' \
@@ -159,6 +179,12 @@ initrd-tools: install create-tools-dirs ## Create initrd with Xen tools included
 	'xenconsoled -vvvv' \
 	'sleep 0.5' \
 	'/usr/lib/xen/bin/xen-init-dom0' \
+	'if [ -x /usr/sbin/xenopsd-xc ]; then' \
+	'    syslogd -O /var/log/messages' \
+	'    mount -t cgroup2 none /sys/fs/cgroup' \
+	'    forkexecd > /var/log/forkexecd.log 2>&1 &' \
+	'    xenopsd-xc > /var/log/xenopsd.log 2>&1 &' \
+	'fi' \
 	'exec /bin/sh' \
 	> $(RCS_FILE) && \
 	chmod +x $(RCS_FILE)

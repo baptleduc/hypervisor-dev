@@ -20,3 +20,8 @@ XEN_SRC := $(HOME)/Documents/Vates/xen
 # Path to the kernel debug symbol file (optional).
 # When set, enables Linux kernel symbol loading in GDB (gdb/gdb-rebuild targets).
 # VMLINUX := $(HOME)/Documents/Vates/linux-fork/vmlinux
+
+# Path to the xen-api tree (optional). When set and xenopsd has been built in
+# it (docker/riscv/xenopsd), initrd-tools adds xenopsd-xc, xenopsd-cli and
+# forkexecd to dom0.
+# XEN_API_SRC := $(HOME)/Documents/Vates/xen-api

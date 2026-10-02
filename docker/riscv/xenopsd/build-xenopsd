@@ -1,0 +1,52 @@
+#!/bin/sh
+# Build xenopsd-xc, xenopsd-cli and forkexecd (xenopsd spawns xenguest
+# through it) from /build/xen-api against the Xen tree
+# mounted at /build/xen (tools already built by xen-riscv64-trixie).
+set -e
+
+XEN=${XEN:-/build/xen}
+
+# What "opam env" sets: dune finds opam libraries through these
+export OPAM_SWITCH_PREFIX=/opam/default
+export OCAMLPATH=/opam/default/lib
+OUT=${OUT:-/build/xen-api/_riscv}
+
+# Xen's OCaml bindings, as built by the trixie image. Only xenctrl and its
+# requirements: Xen's "xenstore" findlib name clashes with the mirage
+# xenstore library xenopsd uses.
+for lib in mmap:xenmmap eventchn:xeneventchn xc:xenctrl; do
+    dir=${lib%%:*} name=${lib##*:}
+    d=$XEN/tools/ocaml/libs/$dir
+    ocamlfind remove $name >/dev/null 2>&1 || true
+    ocamlfind install $name $d/META \
+        $(ls $d/*.cmi $d/*.cmx $d/*.cmxa $d/*.a $d/*.mli 2>/dev/null) \
+        -dll $d/dll*.so
+done
+
+# Headers and libraries of the Xen tree for xen-api's C stubs (xenctrl_ext,
+# xenopsd_xc_c_stubs) and for linking.
+XEN_LIBS=$(for l in ctrl call evtchn foreignmemory devicemodel toolcore \
+                    toollog gnttab guest store light; do
+               printf '%s/tools/libs/%s:' $XEN $l; done)
+export C_INCLUDE_PATH=$XEN/tools/include
+export LIBRARY_PATH=$XEN_LIBS
+export LD_LIBRARY_PATH=$XEN_LIBS
+
+# dune's global lock does not work under qemu-user, and only one dune runs here
+export DUNE_CONFIG__GLOBAL_LOCK=disabled
+
+cd /build/xen-api
+./configure >/dev/null
+dune build --profile=release \
+    ocaml/xenopsd/xc/xenops_xc_main.exe \
+    ocaml/xenopsd/cli/main.exe \
+    ocaml/forkexecd/src/fe_main.exe
+# forkexecd spawns everything through this C helper, not built by dune
+make -C ocaml/forkexecd/helper vfork_helper
+
+mkdir -p $OUT
+install -m 755 _build/default/ocaml/xenopsd/xc/xenops_xc_main.exe $OUT/xenopsd-xc
+install -m 755 _build/default/ocaml/xenopsd/cli/main.exe $OUT/xenopsd-cli
+install -m 755 _build/default/ocaml/forkexecd/src/fe_main.exe $OUT/forkexecd
+install -m 755 ocaml/forkexecd/helper/vfork_helper $OUT/vfork_helper
+echo "built into $OUT"
