@@ -39,7 +39,7 @@ QEMU_COMMON_FLAGS = \
 	-device loader,file=$(KERNEL),addr=0x808ef000
 
 QEMU_BASE_FLAGS = $(QEMU_COMMON_FLAGS) \
-	-device loader,file=$(INITRD),addr=0x90400000 \
+	-device loader,file=$(INITRD),addr=0xe0000000 \
 	-dtb $(DTB_DIR)/dom0-qemu-virt.dtb
 
 QEMU_DOM0LESS_FLAGS = $(QEMU_COMMON_FLAGS) \
@@ -220,7 +220,10 @@ initrd-tools: install create-tools-dirs xenopsd-files ## Create initrd with Xen 
 	> $(RCS_FILE) && \
 	chmod +x $(RCS_FILE)
 	cp $(RCS_FILE) $(INITRD_DIR)/etc/init.d/
-	genext2fs -b 200000 -N 1444 -U -d $(INITRD_DIR)/ $(INITRD)
+	# Size the image to its content (+25%, +8MiB): dom0 holds it in RAM twice,
+	# as the loaded module and as the /dev/ram copy
+	genext2fs -b $$(( $$(du -sk $(INITRD_DIR) | cut -f1) * 5 / 4 + 8192 )) -N 1444 -U \
+		-d $(INITRD_DIR)/ $(INITRD)
 
 # --- Run targets ---
 

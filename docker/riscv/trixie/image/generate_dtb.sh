@@ -287,12 +287,14 @@ case "${TEST_CASE}" in
         CONFIG_FILE="dom0.conf"
         PLATFORM_NAME=dom0-qemu-virt
         PLATFORM_RAM_SIZE=2g
-        PLATFORM_XEN_BOOTARGS="com1=poll sched=null dom0_max_vcpus=1"
+        PLATFORM_XEN_BOOTARGS="com1=poll sched=null dom0_max_vcpus=1 dom0_mem=1536M"
         DOM0_KERNEL_ADDR=0x808ef000
         DOM0_KERNEL_PATH=${KERNEL}
-        DOM0_RAMDISK_ADDR=0x90400000
+        # High in RAM, so Xen's 1:1 allocation of dom0 gets a large first
+        # bank right after the kernel, where the initrd is copied
+        DOM0_RAMDISK_ADDR=0xe0000000
         DOM0_RAMDISK_PATH=${INITRD}
-        DOM0_BOOTARGS="rw root=/dev/ram console=hvc0 keep_bootcon bootmem_debug debug dom0_mem=512M"
+        DOM0_BOOTARGS="rw root=/dev/ram ramdisk_size=400000 console=hvc0 keep_bootcon bootmem_debug debug dom0_mem=512M"
 
         echo "PLATFORM_NAME=\"${PLATFORM_NAME}\"
         PLATFORM_CPU_NUM=\"${PLATFORM_PCPU_NUM}\"
