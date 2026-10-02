@@ -195,7 +195,11 @@ ifneq ($(wildcard $(XENOPSD_DIR)/xapi),)
 		chmod 755 $(INITRD_DIR)/opt/xensource/libexec/dom0term.sh && \
 		install -d -m 700 $(INITRD_DIR)/root && \
 		{ grep -q '^vncterm=' $(INITRD_DIR)/etc/xenopsd-xc.conf || \
-		  echo 'vncterm=/usr/lib/xen/bin/vncterm' >> $(INITRD_DIR)/etc/xenopsd-xc.conf; }; \
+		  echo 'vncterm=/usr/lib/xen/bin/vncterm' >> $(INITRD_DIR)/etc/xenopsd-xc.conf; } && \
+		{ grep -q '^vncterm_base:' $(INITRD_DIR)/etc/passwd || \
+		  printf '%s\n' 'vncterm:x:131071:131071::/:/bin/false' \
+		    'vncterm_base:x:131072:131072::/:/bin/false' >> $(INITRD_DIR)/etc/passwd; } && \
+		mkdir -p $(INITRD_DIR)/var/xen/vncterm; \
 	fi
 	# ponytail: directories xapi requires at start-up, left empty (xen-cmdline
 	# is only access()-checked)
