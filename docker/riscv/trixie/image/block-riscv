@@ -1,0 +1,53 @@
+#!/bin/sh
+# VBD hotplug for the RISC-V dom0: busybox, no bash, no udev.
+# A port of xenopsd's scripts/block for blkback ("vbd" backend kind):
+# give blkback the major:minor of the device in params, then write the
+# keys xenopsd waits for (Hotplug.wait_for_plug) and blkback reads
+# (hotplug-status). xenopsd runs it itself (run_hotplug_scripts) with
+# add or remove as $1 and XENBUS_PATH=backend/vbd/<domid>/<devid>.
+# The nbd branch of the original is left out: no tapdisk/qemu here.
+ACTION=$1
+log() { echo "block-riscv: $*" >> /var/log/block-riscv.log; }
+
+TYPE=$(echo "$XENBUS_PATH" | cut -f 2 -d /)
+DOMID=$(echo "$XENBUS_PATH" | cut -f 3 -d /)
+DEVID=$(echo "$XENBUS_PATH" | cut -f 4 -d /)
+VM=$(xenstore-read "/local/domain/$DOMID/vm" 2>/dev/null)
+DOMUUID=$(xenstore-read "$VM/uuid" 2>/dev/null)
+HOTPLUG=/xapi/$DOMUUID/hotplug/$DOMID/$TYPE/$DEVID
+HOTPLUG_STATUS=$XENBUS_PREFIX$XENBUS_PATH/hotplug-status
+
+fail() {
+    log "$XENBUS_PATH: $*"
+    xenstore-write "$XENBUS_PATH/hotplug-error" "$*"
+    exit 1
+}
+
+log "$ACTION $XENBUS_PATH (vm $DOMUUID)"
+case "$ACTION" in
+add)
+    if [ -z "$XENBUS_PREFIX" ] && [ "$TYPE" != 9pfs ]; then
+        params=$(xenstore-read "$XENBUS_PATH/params" 2>/dev/null) ||
+            fail "no params in xenstore"
+        # An empty CD drive has no params: nothing to hand to blkback
+        if [ -n "$params" ]; then
+            params=$(readlink -f "$params" || echo "$params")
+            [ -b "$params" ] || fail "$params is not a block device"
+            pdev=$(stat -c %t:%T "$params") || fail "stat $params failed"
+            if ! xenstore-exists "$XENBUS_PATH/physical-device" 2>/dev/null; then
+                xenstore-write "$XENBUS_PATH/physical-device" "$pdev"
+            fi
+            log "$XENBUS_PATH: $params is $pdev"
+        fi
+    fi
+    xenstore-write "$HOTPLUG/hotplug" online
+    xenstore-write "$HOTPLUG_STATUS" connected
+    log "$XENBUS_PATH connected"
+    ;;
+remove)
+    xenstore-rm "$HOTPLUG_STATUS" 2>/dev/null
+    xenstore-rm "$HOTPLUG/hotplug" 2>/dev/null
+    log "$XENBUS_PATH removed"
+    ;;
+esac
+exit 0
