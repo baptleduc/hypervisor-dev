@@ -1,0 +1,13 @@
+[Unit]
+Description=RISC-V dom0: pool name and PIFs once xapi is up
+Requires=xapi.service
+After=xapi-init-complete.target xapi.service
+Wants=xapi-init-complete.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/xcpng-riscv/firstboot
+
+[Install]
+WantedBy=multi-user.target
