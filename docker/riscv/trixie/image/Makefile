@@ -264,7 +264,8 @@ initrd-tools: install create-tools-dirs xenopsd-files ## Create initrd with Xen 
 	'fi' \
 	'export LIBXL_DEBUG_DUMP_DTB="/var/log/xen/debug_dump_dt.dtb"' \
 	'xenstored' \
-	'xenconsoled -vvvv' \
+	'mkdir -p /var/log/xen/console' \
+	'xenconsoled -vvvv --log=guest --log-dir=/var/log/xen/console' \
 	'sleep 0.5' \
 	'if [ -x /usr/sbin/xapi ]; then' \
 	'    /usr/libexec/gen-xensource-inventory' \
