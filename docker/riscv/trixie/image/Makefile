@@ -280,6 +280,12 @@ initrd-tools: install create-tools-dirs xenopsd-files ## Create initrd with Xen 
 	'if [ -x /usr/sbin/xapi ]; then' \
 	'    squeezed > /var/log/squeezed.log 2>&1 &' \
 	'    v6d > /var/log/v6d.log 2>&1 &' \
+	'    # The host-internal network bridge, created here: xapi asks' \
+	'    # xcp-networkd for it on VIF plug, and networkd brctl is a stub on' \
+	'    # purpose (with a real one it builds breth0 from MANAGEMENT_INTERFACE' \
+	'    # and flushes eth0, cutting xapi clients off). Bridge.create skips' \
+	'    # addbr for a bridge that exists. Needs a kernel with the bridge' \
+	'    brctl addbr xenapi 2>/dev/null && ip link set xenapi up' \
 	'    xcp-networkd > /var/log/xcp-networkd.log 2>&1 &' \
 	'    /opt/xensource/libexec/gencert /etc/xensource/xapi-pool-tls.pem -1 xapi:pool' \
 	'    # The default cert asks xcp-networkd for the management IP: wait for' \
