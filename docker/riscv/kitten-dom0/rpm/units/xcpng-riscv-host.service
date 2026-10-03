@@ -1,0 +1,14 @@
+[Unit]
+# What an XCP-ng installer and firstboot normally provide, done at boot:
+# the inventory, the management address and the host-internal bridge
+Description=RISC-V dom0 host set-up for the toolstack
+After=local-fs.target systemd-udev-settle.service
+Before=xen-init-dom0.service xcp-networkd.service gencert.service xapi.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/xcpng-riscv/host-setup
+
+[Install]
+WantedBy=multi-user.target

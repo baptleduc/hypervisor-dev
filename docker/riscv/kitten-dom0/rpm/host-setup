@@ -1,0 +1,24 @@
+#!/bin/bash
+# Boot-time host set-up for the RISC-V dom0 (xcpng-riscv-host.service):
+# what an XCP-ng install and firstboot provide on x86.
+set -u
+# The inventory xapi, xcp-networkd and xen-init-dom0 read (kept once made)
+/usr/libexec/gen-xensource-inventory
+# ponytail: QEMU user networking always hands out 10.0.2.15, so no DHCP
+# client; use one once dom0 runs on other networks
+if [ -e /sys/class/net/eth0 ]; then
+    ip link set eth0 up
+    ip addr add 10.0.2.15/24 dev eth0 2>/dev/null
+    ip route add default via 10.0.2.2 2>/dev/null
+    # and its resolver, for dnf
+    [ -s /etc/resolv.conf ] || echo 'nameserver 10.0.2.3' > /etc/resolv.conf
+fi
+# The host-internal network bridge: xapi asks xcp-networkd for it on VIF
+# plug, and networkd's brctl is a stub on purpose (with a real one it
+# builds breth0 from MANAGEMENT_INTERFACE and flushes eth0, cutting xapi
+# clients off). Bridge.create skips a bridge that exists.
+if ! ip link show xenapi >/dev/null 2>&1; then
+    ip link add xenapi type bridge && ip link set xenapi up
+fi
+mkdir -p /dev/shm/metrics
+exit 0
