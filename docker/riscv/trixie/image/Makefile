@@ -209,6 +209,10 @@ ifneq ($(wildcard $(XENOPSD_DIR)/xapi),)
 		install -D -m 755 $(XENOPSD_DIR)/xcp-rrdd-cpu $(INITRD_DIR)/opt/xensource/libexec/xcp-rrdd-plugins/xcp-rrdd-cpu && \
 		install -D -m 755 $(XENOPSD_DIR)/xcp-rrdd-squeezed $(INITRD_DIR)/opt/xensource/libexec/xcp-rrdd-plugins/xcp-rrdd-squeezed; \
 	fi
+	# Network stats for XO: the netdev plugin (xen-api), installed when built
+	if [ -x $(XENOPSD_DIR)/xcp-rrdd-netdev ]; then \
+		install -D -m 755 $(XENOPSD_DIR)/xcp-rrdd-netdev $(INITRD_DIR)/opt/xensource/libexec/xcp-rrdd-plugins/xcp-rrdd-netdev; \
+	fi
 	# ponytail: directories xapi requires at start-up, left empty (xen-cmdline
 	# is only access()-checked)
 	mkdir -p $(INITRD_DIR)/opt/xensource/sm $(INITRD_DIR)/opt/xensource/www \
@@ -280,10 +284,18 @@ initrd-tools: install create-tools-dirs xenopsd-files ## Create initrd with Xen 
 	'    # The pool has no name either; set one once xapi answers' \
 	'    ( i=0; until xe pool-list --minimal >/dev/null 2>&1 || [ $$i -ge 300 ]; do sleep 2; i=$$((i+1)); done;' \
 	'      xe pool-param-set uuid=$$(xe pool-list --minimal) name-label="XCP-ng on RISC-V" ) > /var/log/pool-name.log 2>&1 &' \
+	'    # Introduce the dom0 NICs as PIFs once xapi answers, so XO lists them and' \
+	'    # rrdp-netdev graphs them. Not plugged: plugging bridges eth0, which' \
+	'    # carries the QEMU hostfwd that XO comes in through' \
+	'    ( i=0; until xe host-list --minimal >/dev/null 2>&1 || [ $$i -ge 300 ]; do sleep 2; i=$$((i+1)); done;' \
+	'      xe pif-scan host-uuid=$$(xe host-list --minimal) ) > /var/log/pif-scan.log 2>&1 &' \
 	'    if [ -x /usr/sbin/xcp-rrdd ]; then' \
 	'        P=/opt/xensource/libexec/xcp-rrdd-plugins' \
 	'        $$P/xcp-rrdd-cpu > /var/log/xcp-rrdd-cpu.log 2>&1 &' \
 	'        $$P/xcp-rrdd-squeezed > /var/log/xcp-rrdd-squeezed.log 2>&1 &' \
+	'        if [ -x $$P/xcp-rrdd-netdev ]; then' \
+	'            $$P/xcp-rrdd-netdev > /var/log/xcp-rrdd-netdev.log 2>&1 &' \
+	'        fi' \
 	'    fi' \
 	'    # dom0 console: xapi hands websocket consoles to wsproxy, which' \
 	'    # connects to vncterm on 127.0.0.1:5900 (host_console_vncport)' \
