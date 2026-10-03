@@ -378,6 +378,31 @@ initrd-tools: install create-tools-dirs xenopsd-files ## Create initrd with Xen 
 	genext2fs -b $$(( $$(du -sk $(INITRD_DIR) | cut -f1) * 5 / 4 + 8192 )) -N 1444 -U \
 		-d $(INITRD_DIR)/ $(INITRD)
 
+# --- Distro dom0 payload ---
+
+# The Xen tools, the toolstack and our dom0 scripts, for a distro root
+# (AlmaLinux Kitten) instead of the busybox initrd. The same installs as
+# initrd-tools, into an empty directory: the busybox base and the trixie
+# runtime libraries are only in INITRD_DIR because the Dockerfile copies
+# them there, so they stay out, and the distro provides its own. Added:
+# libempserver, which no distro has, and busybox, which xapi requires.
+PAYLOAD_DIR ?= $(BUILD_DIR)/dom0-payload
+PAYLOAD_TAR ?= $(XENOPSD_DIR)/dom0-payload.tar.gz
+
+dom0-payload: ## Pack the Xen tools and toolstack for a distro dom0 into PAYLOAD_TAR
+	rm -rf $(PAYLOAD_DIR)
+	$(MAKE) install create-tools-dirs xenopsd-files INITRD_DIR=$(PAYLOAD_DIR)
+	# libempserver is XCP-ng's (emu-manager), built in this image and in no
+	# distro's repositories: the payload carries it
+	install -D -m 644 /usr/lib/riscv64-linux-gnu/libempserver.so.1 $(PAYLOAD_DIR)/usr/lib/libempserver.so.1
+	# xapi will not start without a "busybox" on its search path: it is the
+	# DHCP server of host-internal networks. Distros other than Debian do
+	# not always ship one (Kitten: EPEL only), so the payload carries the
+	# image's, as /usr/sbin/busybox, without its applet links
+	install -D -m 755 $(INITRD_DIR)/bin/busybox $(PAYLOAD_DIR)/usr/sbin/busybox
+	tar -C $(PAYLOAD_DIR) --owner=0 --group=0 -czf $(PAYLOAD_TAR) .
+	@echo "Wrote $(PAYLOAD_TAR) ($$(du -h $(PAYLOAD_TAR) | cut -f1))"
+
 # --- Run targets ---
 
 go: $(INITRD) $(KERNEL) $(QEMU) $(OPENSBI) $(XEN_BIN) $(DTB_SCRIPT) ## Launch Xen with dom0 in QEMU
