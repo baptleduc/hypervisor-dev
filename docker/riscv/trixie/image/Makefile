@@ -230,6 +230,9 @@ initrd-tools: install create-tools-dirs xenopsd-files ## Create initrd with Xen 
 	'mkdir -p /dev/pts/' \
 	'mount -t devpts devpts /dev/pts' \
 	'mount -t sysfs sysfs /sys' \
+	'# xapi names the host after the hostname on first start: without one' \
+	'# XO shows the host as "(none)"' \
+	'hostname xcp-ng-riscv64' \
 	'# xapi listens on 127.0.0.1:80 behind stunnel' \
 	'ip link set lo up' \
 	'# ponytail: QEMU user networking always hands out 10.0.2.15, so no' \
@@ -274,6 +277,9 @@ initrd-tools: install create-tools-dirs xenopsd-files ## Create initrd with Xen 
 	'        sleep 2' \
 	'    fi' \
 	'    xapi > /var/log/xapi.log 2>&1 &' \
+	'    # The pool has no name either; set one once xapi answers' \
+	'    ( i=0; until xe pool-list --minimal >/dev/null 2>&1 || [ $$i -ge 300 ]; do sleep 2; i=$$((i+1)); done;' \
+	'      xe pool-param-set uuid=$$(xe pool-list --minimal) name-label="XCP-ng on RISC-V" ) > /var/log/pool-name.log 2>&1 &' \
 	'    if [ -x /usr/sbin/xcp-rrdd ]; then' \
 	'        P=/opt/xensource/libexec/xcp-rrdd-plugins' \
 	'        $$P/xcp-rrdd-cpu > /var/log/xcp-rrdd-cpu.log 2>&1 &' \
