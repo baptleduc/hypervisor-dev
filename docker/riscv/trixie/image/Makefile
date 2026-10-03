@@ -247,6 +247,10 @@ ifneq ($(wildcard $(XENOPSD_DIR)/xapi),)
 	if [ -x $(XENOPSD_DIR)/xcp-rrdd-netdev ]; then \
 		install -D -m 755 $(XENOPSD_DIR)/xcp-rrdd-netdev $(INITRD_DIR)/opt/xensource/libexec/xcp-rrdd-plugins/xcp-rrdd-netdev; \
 	fi
+	# Disk stats for XO: the iostat plugin (xen-api), installed when built
+	if [ -x $(XENOPSD_DIR)/xcp-rrdd-iostat ]; then \
+		install -D -m 755 $(XENOPSD_DIR)/xcp-rrdd-iostat $(INITRD_DIR)/opt/xensource/libexec/xcp-rrdd-plugins/xcp-rrdd-iostat; \
+	fi
 	# ponytail: directories xapi requires at start-up, left empty (xen-cmdline
 	# is only access()-checked)
 	mkdir -p $(INITRD_DIR)/opt/xensource/sm $(INITRD_DIR)/opt/xensource/www \
@@ -336,6 +340,9 @@ initrd-tools: install create-tools-dirs xenopsd-files ## Create initrd with Xen 
 	'        $$P/xcp-rrdd-squeezed > /var/log/xcp-rrdd-squeezed.log 2>&1 &' \
 	'        if [ -x $$P/xcp-rrdd-netdev ]; then' \
 	'            $$P/xcp-rrdd-netdev > /var/log/xcp-rrdd-netdev.log 2>&1 &' \
+	'        fi' \
+	'        if [ -x $$P/xcp-rrdd-iostat ]; then' \
+	'            $$P/xcp-rrdd-iostat > /var/log/xcp-rrdd-iostat.log 2>&1 &' \
 	'        fi' \
 	'    fi' \
 	'    # dom0 console: xapi hands websocket consoles to wsproxy, which' \
