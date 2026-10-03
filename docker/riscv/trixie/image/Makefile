@@ -44,6 +44,23 @@ QEMU_BASE_FLAGS = $(QEMU_COMMON_FLAGS) \
 	-device loader,file=$(INITRD),addr=0xe0000000 \
 	-dtb $(DTB_DIR)/dom0-qemu-virt.dtb
 
+# dom0 root on a virtio disk instead of the RAM initrd: set DOM0_DISK to a
+# raw ext image. Xen hands dom0 every device-tree node it does not use, the
+# virtio-mmio slots included, so the disk shows up in dom0 as /dev/vda.
+# noinitrd: the initrd is an ext2 image, not an initramfs, so with a root
+# other than /dev/ram the kernel would still mount it and run its
+# /linuxrc (busybox has one), and dom0 would carry on from RAM.
+DOM0_DISK ?=
+ifneq ($(DOM0_DISK),)
+QEMU_BASE_FLAGS += \
+	-drive file=$(DOM0_DISK),if=none,format=raw,id=dom0disk \
+	-device virtio-blk-device,drive=dom0disk
+DOM0_ROOT_ARGS := root=/dev/vda noinitrd
+else
+DOM0_ROOT_ARGS := root=/dev/ram ramdisk_size=600000
+endif
+export DOM0_ROOT_ARGS
+
 QEMU_DOM0LESS_FLAGS = $(QEMU_COMMON_FLAGS) \
 	-device loader,file=$(DOMU_INITRD_IMG),addr=0x90400000 \
 	-dtb $(DTB_DIR)/dom0less-qemu-virt.dtb
