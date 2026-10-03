@@ -1,0 +1,231 @@
+#!/bin/sh
+# rawfile: a SMAPIv1 storage driver for the RISC-V dom0, in busybox sh.
+# There is no python here for the real sm, no blktap for its VHD files,
+# and the dom0 has no block device, so: an SR is a tmpfs, a VDI is a
+# sparse raw file in it, attached through a loop device for blkback.
+# Everything lives in dom0 RAM and is gone at the next boot, like the
+# rest of this dom0 (xapi's database included).
+#
+# xapi runs it as /opt/xensource/sm/rawfileSR with one argument, an
+# XML-RPC methodCall (sm_exec.ml, xmlrpc_of_call), and parses an
+# XML-RPC methodResponse from stdout, so nothing else may go there.
+# Like the python drivers, it writes the VDI records itself, over
+# XML-RPC to xapi on 127.0.0.1:80, with the session_ref it is given.
+# The SR type has to be in xapi.conf's sm-plugins list.
+LOG=/var/log/rawfileSR.log
+log() { echo "$(date '+%F %T') $*" >> "$LOG"; }
+MNT=/run/sr-mount
+
+# One <member> per line, so top-level fields can be picked out by name.
+# Values arrive XML-escaped and are passed back to xapi as they are.
+REQ=$(printf '%s' "$1" | sed 's|<member>|\n<member>|g')
+field() {
+    printf '%s\n' "$REQ" |
+        sed -n "s|^<member><name>$1</name><value>\([^<]*\)</value>.*|\1|p" | head -n 1
+}
+# Nth element of the args array (1-based); <value/> is an empty string
+arg() {
+    printf '%s\n' "$REQ" |
+        sed -n 's|^<member><name>args</name><value><array><data>\(.*\)</data></array>.*|\1|p' |
+        sed 's|<value/>|<value></value>|g; s|</value>|\n|g; s|<value>||g' |
+        sed -n "$1p"
+}
+
+respond() {
+    printf '<?xml version="1.0"?><methodResponse><params><param>%s</param></params></methodResponse>' "$1"
+}
+ok() { respond '<value><nil/></value>'; exit 0; }
+str() { printf '<value>%s</value>' "$1"; }
+member() { printf '<member><name>%s</name>%s</member>' "$1" "$2"; }
+fail() {
+    log "FAIL $CMD: $*"
+    printf '<?xml version="1.0"?><methodResponse><fault><value><struct>'
+    member faultCode '<value><int>1</int></value>'
+    member faultString "$(str "rawfile: $*")"
+    printf '</struct></value></fault></methodResponse>'
+    exit 0
+}
+
+# XML-RPC call to xapi; prints the Value of a Success, fails otherwise
+xapi() {
+    method=$1
+    shift
+    body="<?xml version=\"1.0\"?><methodCall><methodName>$method</methodName><params>"
+    for p in "$@"; do body="$body<param>$p</param>"; done
+    body="$body</params></methodCall>"
+    reply=$(wget -qO- --header "Content-Type: text/xml" --post-data="$body" \
+        http://127.0.0.1/) || { log "$method: HTTP error"; return 1; }
+    case "$reply" in
+    *'<name>Status</name><value>Success</value>'*)
+        printf '%s' "$reply" |
+            sed -n 's|.*<name>Value</name><value>\([^<]*\)</value>.*|\1|p'
+        ;;
+    *)
+        log "$method: $reply"
+        return 1
+        ;;
+    esac
+}
+
+CMD=$(field command)
+SESSION=$(field session_ref)
+SR_UUID=$(field sr_uuid)
+SR_REF=$(field sr_ref)
+VDI_UUID=$(field vdi_uuid)
+VDI_REF=$(field vdi_ref)
+VDI_LOC=$(field vdi_location)
+DIR=$MNT/$SR_UUID
+log "$CMD sr=$SR_UUID vdi=$VDI_UUID args=$(arg 1) $(arg 2)"
+
+# The loop device backing a file. Not from losetup -a: busybox prints
+# the kernel's 64-byte lo_file_name, which cuts our paths short
+loop_of() {
+    for b in /sys/block/loop*/loop/backing_file; do
+        if [ -f "$b" ] && [ "$(cat "$b")" = "$1" ]; then
+            b=${b#/sys/block/}
+            echo "/dev/${b%%/*}"
+            return 0
+        fi
+    done
+}
+
+# Report the tmpfs's size and use, and the sum of the VDI sizes, to xapi
+update_sizes() {
+    set -- $(df -k "$DIR" | tail -n 1)
+    total=$(($2 * 1024))
+    used=$(($3 * 1024))
+    alloc=0
+    for f in "$DIR"/*.raw; do
+        [ -f "$f" ] && alloc=$((alloc + $(stat -c %s "$f")))
+    done
+    xapi SR.set_physical_size "$(str "$SESSION")" "$(str "$SR_REF")" "$(str $total)" >/dev/null &&
+        xapi SR.set_physical_utilisation "$(str "$SESSION")" "$(str "$SR_REF")" "$(str $used)" >/dev/null &&
+        xapi SR.set_virtual_allocation "$(str "$SESSION")" "$(str "$SR_REF")" "$(str $alloc)" >/dev/null
+}
+
+ensure_mounted() {
+    mountpoint -q "$DIR" && return 0
+    size=$(printf '%s\n' "$REQ" |
+        sed -n 's|^<member><name>size</name><value>\([^<]*\)</value>.*|\1|p' | head -n 1)
+    mkdir -p "$DIR" &&
+        mount -t tmpfs -o "size=${size:-256m},mode=0700" rawfile "$DIR" >> "$LOG" 2>&1
+}
+
+case "$CMD" in
+sr_get_driver_info)
+    caps=""
+    for c in SR_CREATE SR_DELETE SR_ATTACH SR_DETACH SR_SCAN SR_UPDATE \
+        VDI_CREATE VDI_DELETE VDI_ATTACH VDI_DETACH VDI_ACTIVATE VDI_DEACTIVATE; do
+        caps="$caps$(str $c)"
+    done
+    respond "<value><struct>$(member name "$(str rawfile)")$(member description \
+        "$(str 'Raw files on a tmpfs in dom0 RAM, through loop devices and blkback')")$(member \
+        vendor "$(str xcpng-riscv64)")$(member copyright "$(str GPLv2)")$(member \
+        driver_version "$(str 0.1)")$(member required_api_version "$(str 1.0)")$(member \
+        capabilities "<value><array><data>$caps</data></array></value>")$(member \
+        configuration "<value><array><data><value><struct>$(member key "$(str size)")$(member \
+        description "$(str 'tmpfs size, as for mount -o size= (default 256m)')")</struct></value></data></array></value>")</struct></value>"
+    exit 0
+    ;;
+sr_create)
+    ensure_mounted || fail "cannot mount a tmpfs on $DIR"
+    ok
+    ;;
+sr_attach)
+    ensure_mounted || fail "cannot mount a tmpfs on $DIR"
+    ok
+    ;;
+sr_detach)
+    # Keep the tmpfs: unmounting it would throw the VDIs away
+    ok
+    ;;
+sr_delete)
+    for f in "$DIR"/*.raw; do
+        [ -f "$f" ] && fail "SR is not empty"
+    done
+    umount "$DIR" >> "$LOG" 2>&1
+    rmdir "$DIR" 2>/dev/null
+    ok
+    ;;
+sr_scan | sr_update)
+    ensure_mounted || fail "cannot mount a tmpfs on $DIR"
+    update_sizes || fail "cannot update the SR sizes"
+    ok
+    ;;
+vdi_create)
+    ensure_mounted || fail "cannot mount a tmpfs on $DIR"
+    size=$(arg 1)
+    [ -n "$VDI_UUID" ] || VDI_UUID=$(cat /proc/sys/kernel/random/uuid)
+    file=$DIR/$VDI_UUID.raw
+    # Sparse: tmpfs only spends RAM on blocks the guest writes
+    dd if=/dev/null of="$file" bs=1 seek="$size" 2>> "$LOG" ||
+        fail "cannot create $file"
+    if ! ref=$(xapi VDI.db_introduce "$(str "$SESSION")" "$(str "$VDI_UUID")" \
+        "$(str "$(arg 2)")" "$(str "$(arg 3)")" "$(str "$SR_REF")" "$(str user)" \
+        '<value><boolean>0</boolean></value>' '<value><boolean>0</boolean></value>' \
+        '<value><struct></struct></value>' "$(str "$VDI_UUID")" \
+        '<value><struct></struct></value>' '<value><struct></struct></value>' \
+        '<value><boolean>1</boolean></value>' "$(str "$size")" "$(str 0)"); then
+        rm -f "$file"
+        fail "VDI.db_introduce failed"
+    fi
+    log "created $file ($size bytes) as $ref"
+    update_sizes
+    respond "<value><struct>$(member uuid "$(str "$VDI_UUID")")$(member location \
+        "$(str "$VDI_UUID")")</struct></value>"
+    exit 0
+    ;;
+vdi_delete)
+    file=$DIR/$VDI_LOC.raw
+    dev=$(loop_of "$file")
+    [ -z "$dev" ] || fail "$file is still attached on $dev"
+    rm -f "$file"
+    xapi VDI.db_forget "$(str "$SESSION")" "$(str "$VDI_REF")" >/dev/null ||
+        fail "VDI.db_forget failed"
+    update_sizes
+    ok
+    ;;
+vdi_attach)
+    file=$DIR/$VDI_LOC.raw
+    [ -f "$file" ] || fail "no file for VDI $VDI_UUID"
+    dev=$(loop_of "$file")
+    if [ -z "$dev" ]; then
+        ro=""
+        [ "$(arg 1)" = false ] && ro=-r
+        losetup $ro -f "$file" >> "$LOG" 2>&1 || fail "losetup $file failed"
+        dev=$(loop_of "$file")
+        [ -n "$dev" ] || fail "no loop device for $file"
+    fi
+    log "attached $file on $dev"
+    # xenstore_data lands under the backend's sm-data/. backend-kind=vbd
+    # asks xenopsd for blkback; the vbd3 key only exists so that
+    # params_of_backend keeps this map as it is instead of putting
+    # backend-kind=vbd3 (tapdisk3, not here) in front of it. sr-uuid and
+    # vdi-uuid are what xcp-rrdd-iostat maps a disk to its SR and VM by.
+    respond "<value><struct>$(member params "$(str "$dev")")$(member params_nbd \
+        '<value></value>')$(member o_direct '<value><boolean>1</boolean></value>')$(member \
+        o_direct_reason '<value></value>')$(member xenstore_data "<value><struct>$(member \
+        backend-kind "$(str vbd)")$(member vbd3 "$(str unused)")$(member \
+        sr-uuid "$(str "$SR_UUID")")$(member vdi-uuid "$(str "$VDI_UUID")")</struct></value>")</struct></value>"
+    exit 0
+    ;;
+vdi_detach)
+    file=$DIR/$VDI_LOC.raw
+    dev=$(loop_of "$file")
+    if [ -n "$dev" ]; then
+        losetup -d "$dev" >> "$LOG" 2>&1 || fail "losetup -d $dev failed"
+    fi
+    ok
+    ;;
+vdi_activate | vdi_deactivate)
+    ok
+    ;;
+vdi_epoch_begin | vdi_epoch_end)
+    # Sent around a VM start and shutdown; they matter only for
+    # on-boot=reset VDIs, which this driver does not offer
+    ok
+    ;;
+*)
+    fail "$CMD is not supported"
+    ;;
+esac

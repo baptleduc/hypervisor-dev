@@ -176,6 +176,11 @@ ifneq ($(wildcard $(XENOPSD_DIR)/xenopsd-xc),)
 		install -D -m 755 $(CONFIGS_DIR)/block-riscv $(INITRD_DIR)/usr/lib/xenopsd/block-riscv && \
 		sed -i 's|^vbd-script=.*|vbd-script=/usr/lib/xenopsd/block-riscv|' $(INITRD_DIR)/etc/xenopsd-xc.conf; \
 	fi
+	# Storage: rawfile, a busybox SMAPIv1 driver (tmpfs + loop + blkback);
+	# sm-plugins is set after xapi.conf below
+	if [ -f $(CONFIGS_DIR)/rawfileSR ]; then \
+		install -D -m 755 $(CONFIGS_DIR)/rawfileSR $(INITRD_DIR)/opt/xensource/sm/rawfileSR; \
+	fi
 	install -D -m 755 $(CONFIGS_DIR)/xenopsd-stub $(INITRD_DIR)/usr/libexec/xenopsd-stub
 	install -D -m 644 $(CONFIGS_DIR)/riscv.cfg $(INITRD_DIR)/domu/riscv.cfg
 	# The guest kernel caps /dev/ram at its default size; leave room for a
@@ -195,6 +200,13 @@ ifneq ($(wildcard $(XENOPSD_DIR)/xapi),)
 	mkdir -p $(INITRD_DIR)/etc/stunnel
 	install -D -m 755 $(CONFIGS_DIR)/xe-vm-from-cfg $(INITRD_DIR)/usr/bin/xe-vm-from-cfg
 	install -D -m 644 $(CONFIGS_DIR)/xapi.conf $(INITRD_DIR)/etc/xapi.conf
+	# xapi only loads the SM drivers named in sm-plugins, and only creates
+	# their SM records when sync_sm_records is not disabled
+	if [ -f $(CONFIGS_DIR)/rawfileSR ]; then \
+		grep -q '^sm-plugins=' $(INITRD_DIR)/etc/xapi.conf || \
+			echo 'sm-plugins=rawfile' >> $(INITRD_DIR)/etc/xapi.conf; \
+		sed -i '/^disable-dbsync-for=/s/ sync_sm_records//' $(INITRD_DIR)/etc/xapi.conf; \
+	fi
 	install -D -m 755 $(XENOPSD_DIR)/squeezed $(INITRD_DIR)/usr/sbin/squeezed
 	install -D -m 644 $(CONFIGS_DIR)/squeezed.conf $(INITRD_DIR)/etc/squeezed.conf
 	install -D -m 755 $(XENOPSD_DIR)/v6d $(INITRD_DIR)/usr/sbin/v6d
