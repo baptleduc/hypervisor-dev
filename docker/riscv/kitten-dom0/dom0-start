@@ -1,0 +1,99 @@
+#!/bin/bash
+# Start the Xen and XAPI daemons in a RISC-V dom0 on a distro root
+# (AlmaLinux Kitten), from xcpng-riscv-dom0.service. The same sequence as
+# the busybox initrd's rcS (docker/riscv/trixie/image/Makefile,
+# initrd-tools), minus what systemd already does: mounting proc, sys,
+# devpts, cgroup2 and /dev/shm, syslog (journald), the console shell
+# (serial-getty@hvc0). The daemons keep running in this unit's cgroup
+# after the script exits (Type=oneshot, RemainAfterExit=yes).
+set -u
+log() { echo "dom0-start: $*"; }
+
+mountpoint -q /proc/xen || mount -t xenfs xenfs /proc/xen
+
+# xapi names the host after the hostname on first start (/etc/hostname
+# sets it too; this covers a root built without one)
+[ "$(hostname)" = localhost ] && hostname xcp-ng-riscv64
+
+# ponytail: QEMU user networking always hands out 10.0.2.15, so no DHCP
+# client; use one once dom0 runs on other networks
+if [ -e /sys/class/net/eth0 ]; then
+    ip link set eth0 up
+    ip addr add 10.0.2.15/24 dev eth0 2>/dev/null
+    ip route add default via 10.0.2.2 2>/dev/null
+fi
+
+export LIBXL_DEBUG_DUMP_DTB=/var/log/xen/debug_dump_dt.dtb
+xenstored
+mkdir -p /var/log/xen/console
+xenconsoled -vvvv --log=guest --log-dir=/var/log/xen/console
+sleep 0.5
+
+/usr/libexec/gen-xensource-inventory
+# shellcheck disable=SC1091
+. /etc/xensource-inventory
+/usr/lib/xen/bin/xen-init-dom0 "$CONTROL_DOMAIN_UUID"
+
+forkexecd > /var/log/forkexecd.log 2>&1 &
+xenopsd-xc > /var/log/xenopsd.log 2>&1 &
+squeezed > /var/log/squeezed.log 2>&1 &
+v6d > /var/log/v6d.log 2>&1 &
+
+# The host-internal network bridge, created here: xapi asks xcp-networkd
+# for it on VIF plug, and networkd's brctl is a stub on purpose (with a
+# real one it builds breth0 from MANAGEMENT_INTERFACE and flushes eth0,
+# cutting xapi clients off). Bridge.create skips a bridge that exists.
+if ! ip link show xenapi >/dev/null 2>&1; then
+    ip link add xenapi type bridge && ip link set xenapi up
+fi
+xcp-networkd > /var/log/xcp-networkd.log 2>&1 &
+
+/opt/xensource/libexec/gencert /etc/xensource/xapi-pool-tls.pem -1 xapi:pool
+# The default cert asks xcp-networkd for the management IP: wait for it,
+# and bound the call so a stuck networkd cannot block the boot
+i=0
+while [ ! -S /var/lib/xcp/networkd ] && [ $i -lt 120 ]; do sleep 1; i=$((i + 1)); done
+# ponytail: without a dom0 NIC there is no management IP for the default
+# cert: serve the pool one on 443 instead
+timeout 120 /opt/xensource/libexec/gencert /etc/xensource/xapi-ssl.pem -1 default ||
+    cp /etc/xensource/xapi-pool-tls.pem /etc/xensource/xapi-ssl.pem
+
+# xcp-rrdd before xapi, as xcp-rrdd.service orders it; plugins write their
+# metrics to /dev/shm/metrics
+mkdir -p /dev/shm/metrics
+xcp-rrdd > /var/log/xcp-rrdd.log 2>&1 &
+sleep 2
+
+xapi > /var/log/xapi.log 2>&1 &
+
+# The pool has no name; set one once xapi answers (first boot only, the
+# database keeps it on a disk root)
+(
+    i=0
+    until xe pool-list --minimal >/dev/null 2>&1 || [ $i -ge 300 ]; do sleep 2; i=$((i + 1)); done
+    pool=$(xe pool-list --minimal)
+    [ -n "$(xe pool-param-get uuid="$pool" param-name=name-label)" ] ||
+        xe pool-param-set uuid="$pool" name-label="XCP-ng on RISC-V"
+) > /var/log/pool-name.log 2>&1 &
+# Introduce the dom0 NICs as PIFs once xapi answers, so XO lists them and
+# rrdp-netdev graphs them. Not plugged: plugging bridges eth0, which
+# carries the QEMU hostfwd that XO comes in through
+(
+    i=0
+    until xe host-list --minimal >/dev/null 2>&1 || [ $i -ge 300 ]; do sleep 2; i=$((i + 1)); done
+    xe pif-scan host-uuid="$(xe host-list --minimal)"
+) > /var/log/pif-scan.log 2>&1 &
+
+P=/opt/xensource/libexec/xcp-rrdd-plugins
+for p in cpu squeezed netdev iostat; do
+    [ -x $P/xcp-rrdd-$p ] && $P/xcp-rrdd-$p > /var/log/xcp-rrdd-$p.log 2>&1 &
+done
+
+# dom0 console: xapi hands websocket consoles to wsproxy, which connects
+# to vncterm on 127.0.0.1:5900 (host_console_vncport)
+if [ -x /usr/libexec/xapi/wsproxy ]; then
+    /usr/libexec/xapi/sockexec /var/lib/xcp/websockproxy /usr/libexec/xapi/wsproxy > /var/log/wsproxy.log 2>&1 &
+    TERM=linux /usr/lib/xen/bin/vncterm -v 127.0.0.1:0 -r -x /local/domain/0/console -T \
+        -c /opt/xensource/libexec/dom0term.sh > /var/log/vncterm.log 2>&1 &
+fi
+log "started"
