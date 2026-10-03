@@ -1,0 +1,64 @@
+#!/bin/sh
+# VIF hotplug for the RISC-V dom0: busybox, no bash, no udev, no python.
+# Does the part of xenopsd's vif/vif-real/setup-vif-rules that a bridged
+# VIF needs: put vifD.N on its bridge, then write the keys xenopsd waits
+# for (Hotplug.wait_for_plug) and netback reads (hotplug-status).
+# xenopsd runs it itself (run_hotplug_scripts, default true) with the
+# action as $1 (add, online, remove) and XENBUS_PATH in the environment,
+# once for backend/vif/<domid>/<devid> and once more for backend/tap/...
+ACTION=$1
+log() { echo "vif-riscv: $*" >> /var/log/vif-riscv.log; }
+
+DOMID=$(echo "$XENBUS_PATH" | cut -f 3 -d /)
+DEVID=$(echo "$XENBUS_PATH" | cut -f 4 -d /)
+dev=vif$DOMID.$DEVID
+VM=$(xenstore-read "/local/domain/$DOMID/vm" 2>/dev/null)
+DOMUUID=$(xenstore-read "$VM/uuid" 2>/dev/null)
+HOTPLUG=/xapi/$DOMUUID/hotplug/$DOMID/vif/$DEVID
+PRIVATE=/xapi/$DOMUUID/private/vif/$DEVID
+
+fail() {
+    log "$dev: $*"
+    xenstore-write "$XENBUS_PATH/hotplug-error" "$*"
+    exit 1
+}
+
+# Only bridged netback VIFs: no tap devices (no emulated NICs) here
+case "$XENBUS_PATH" in
+backend/vif/*) ;;
+*) exit 0 ;;
+esac
+log "$ACTION $XENBUS_PATH (vm $DOMUUID)"
+case "$ACTION" in
+online)
+    bridge=$(xenstore-read "$XENBUS_PATH/bridge" 2>/dev/null) ||
+        bridge=$(xenstore-read "$PRIVATE/bridge" 2>/dev/null) ||
+        fail "no bridge in xenstore"
+    mac=$(xenstore-read "$PRIVATE/bridge-MAC" 2>/dev/null) || mac=fe:ff:ff:ff:ff:ff
+    [ -d "/sys/class/net/$bridge" ] || fail "bridge $bridge does not exist"
+    ip link set "$dev" down
+    ip link set "$dev" arp off
+    ip link set "$dev" address "$mac"
+    ip addr flush "$dev"
+    # online can come more than once: an attached VIF is not an error
+    if [ ! -e "/sys/class/net/$bridge/brif/$dev" ]; then
+        brctl addif "$bridge" "$dev" || fail "brctl addif $bridge $dev failed"
+    fi
+    ip link set "$dev" up
+    xenstore-write "$HOTPLUG/vif-ifindex" "$(cat /sys/class/net/$dev/ifindex)"
+    xenstore-write "$HOTPLUG/vif" "$dev"
+    xenstore-write "$HOTPLUG/hotplug" online
+    xenstore-write "$XENBUS_PATH/hotplug-status" connected
+    log "$dev on $bridge, connected"
+    ;;
+remove|offline)
+    for b in /sys/class/net/*/brif/"$dev"; do
+        [ -e "$b" ] && brctl delif "$(echo "$b" | cut -f 5 -d /)" "$dev"
+    done
+    xenstore-rm "$XENBUS_PATH/hotplug-status" 2>/dev/null
+    xenstore-rm "$HOTPLUG/vif-ifindex" 2>/dev/null
+    xenstore-rm "$HOTPLUG/hotplug" 2>/dev/null
+    log "$dev removed"
+    ;;
+esac
+exit 0

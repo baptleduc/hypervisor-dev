@@ -163,6 +163,13 @@ ifneq ($(wildcard $(XENOPSD_DIR)/xenopsd-xc),)
 	install -D -m 755 $(XENOPSD_DIR)/vfork_helper $(INITRD_DIR)/usr/libexec/xapi/vfork_helper
 	install -D -m 755 $(XENOPSD_DIR)/xenopsd-cli $(INITRD_DIR)/usr/bin/xenopsd-cli
 	install -D -m 644 $(CONFIGS_DIR)/xenopsd-xc.conf $(INITRD_DIR)/etc/xenopsd-xc.conf
+	# VIFs: xenopsd runs vif-script itself (run_hotplug_scripts); vif-riscv
+	# bridges the VIF and writes the keys xenopsd waits for, without the
+	# bash/python/udev the stock vif scripts need
+	if [ -f $(CONFIGS_DIR)/vif-riscv ]; then \
+		install -D -m 755 $(CONFIGS_DIR)/vif-riscv $(INITRD_DIR)/usr/lib/xenopsd/vif-riscv && \
+		sed -i 's|^vif-script=.*|vif-script=/usr/lib/xenopsd/vif-riscv|' $(INITRD_DIR)/etc/xenopsd-xc.conf; \
+	fi
 	install -D -m 755 $(CONFIGS_DIR)/xenopsd-stub $(INITRD_DIR)/usr/libexec/xenopsd-stub
 	install -D -m 644 $(CONFIGS_DIR)/riscv.cfg $(INITRD_DIR)/domu/riscv.cfg
 	# The guest kernel caps /dev/ram at its default size; leave room for a
