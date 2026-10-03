@@ -1,0 +1,15 @@
+[Unit]
+Description=Xen and XAPI daemons of the RISC-V dom0
+# One unit for the whole stack, like the busybox rcS it replaces: the
+# stock per-daemon units come later, once the toolstack is packaged
+After=local-fs.target systemd-modules-load.service proc-xen.mount
+Wants=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/xcpng-riscv/dom0-start
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target
