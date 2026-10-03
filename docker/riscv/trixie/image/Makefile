@@ -108,7 +108,13 @@ create-tools-dirs: create-common-dirs
 	cp $(CONFIGS_DIR)/xl.conf $(INITRD_DIR)/etc/xen/
 	cp $(CONFIGS_DIR)/domu.cfg $(INITRD_DIR)/domu/
 	cp $(KERNEL) $(INITRD_DIR)/domu/
-	cp $(DOMU_INITRD_IMG) $(INITRD_DIR)/domu/initrd.img
+	# A domU initrd built outside the image (with xen-guest-agent) replaces
+	# the stock busybox one when present
+	if [ -f $(XENOPSD_DIR)/domu-initrd.img ]; then \
+		cp $(XENOPSD_DIR)/domu-initrd.img $(INITRD_DIR)/domu/initrd.img; \
+	else \
+		cp $(DOMU_INITRD_IMG) $(INITRD_DIR)/domu/initrd.img; \
+	fi
 
 # --- Build targets ---
 
@@ -159,6 +165,9 @@ ifneq ($(wildcard $(XENOPSD_DIR)/xenopsd-xc),)
 	install -D -m 644 $(CONFIGS_DIR)/xenopsd-xc.conf $(INITRD_DIR)/etc/xenopsd-xc.conf
 	install -D -m 755 $(CONFIGS_DIR)/xenopsd-stub $(INITRD_DIR)/usr/libexec/xenopsd-stub
 	install -D -m 644 $(CONFIGS_DIR)/riscv.cfg $(INITRD_DIR)/domu/riscv.cfg
+	# The guest kernel caps /dev/ram at its default size; leave room for a
+	# bigger initrd (the RAM disk only takes the pages it uses)
+	sed -i 's|root=/dev/ram"|root=/dev/ram ramdisk_size=32768"|' $(INITRD_DIR)/domu/riscv.cfg
 	mkdir -p $(INITRD_DIR)/etc/xcp $(INITRD_DIR)/var/lib/xcp $(INITRD_DIR)/var/xapi/forker \
 		$(INITRD_DIR)/var/run/nonpersistent/forkexecd $(INITRD_DIR)/var/log
 	echo bridge > $(INITRD_DIR)/etc/xcp/network.conf
