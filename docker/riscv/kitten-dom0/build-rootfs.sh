@@ -41,7 +41,7 @@ rm -rf "$R"
 "${DNF[@]}" install systemd systemd-udev bash python3 dnf iproute util-linux \
   kmod procps-ng coreutils findutils gawk sed grep tar gzip wget openssl \
   stunnel pam passwd shadow-utils hostname less vim-minimal e2fsprogs libnl3 \
-  ncurses
+  ncurses iputils
 shopt -s nullglob
 extra=("$IN"/*.riscv64.rpm)
 if [ ${#extra[@]} -gt 0 ]; then
