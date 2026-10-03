@@ -170,6 +170,12 @@ ifneq ($(wildcard $(XENOPSD_DIR)/xenopsd-xc),)
 		install -D -m 755 $(CONFIGS_DIR)/vif-riscv $(INITRD_DIR)/usr/lib/xenopsd/vif-riscv && \
 		sed -i 's|^vif-script=.*|vif-script=/usr/lib/xenopsd/vif-riscv|' $(INITRD_DIR)/etc/xenopsd-xc.conf; \
 	fi
+	# VBDs: same mechanism for vbd-script; block-riscv hands blkback the
+	# device in params, without the bash of xenopsd's block script
+	if [ -f $(CONFIGS_DIR)/block-riscv ]; then \
+		install -D -m 755 $(CONFIGS_DIR)/block-riscv $(INITRD_DIR)/usr/lib/xenopsd/block-riscv && \
+		sed -i 's|^vbd-script=.*|vbd-script=/usr/lib/xenopsd/block-riscv|' $(INITRD_DIR)/etc/xenopsd-xc.conf; \
+	fi
 	install -D -m 755 $(CONFIGS_DIR)/xenopsd-stub $(INITRD_DIR)/usr/libexec/xenopsd-stub
 	install -D -m 644 $(CONFIGS_DIR)/riscv.cfg $(INITRD_DIR)/domu/riscv.cfg
 	# The guest kernel caps /dev/ram at its default size; leave room for a
