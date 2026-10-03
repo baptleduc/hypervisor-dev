@@ -72,7 +72,7 @@ help: ## Show this help message
 	@echo "Local config: config.mk (copy from config.mk.example)"
 
 setup: ## Register QEMU binfmt emulators (run once after each reboot)
-	docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+	docker run --rm --privileged multiarch/qemu-user-static --reset -p yes --credential yes
 
 build-kernel: ## Build local Linux kernel (requires KERNEL_SRC=<path>)
 ifndef KERNEL_SRC
