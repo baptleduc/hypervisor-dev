@@ -42,7 +42,8 @@ online)
     ip addr flush "$dev"
     # online can come more than once: an attached VIF is not an error
     if [ ! -e "/sys/class/net/$bridge/brif/$dev" ]; then
-        brctl addif "$bridge" "$dev" || fail "brctl addif $bridge $dev failed"
+        # ip, not brctl: busybox has both, distros (EL) no longer ship brctl
+        ip link set "$dev" master "$bridge" || fail "ip link set $dev master $bridge failed"
     fi
     ip link set "$dev" up
     xenstore-write "$HOTPLUG/vif-ifindex" "$(cat /sys/class/net/$dev/ifindex)"
@@ -52,9 +53,9 @@ online)
     log "$dev on $bridge, connected"
     ;;
 remove|offline)
-    for b in /sys/class/net/*/brif/"$dev"; do
-        [ -e "$b" ] && brctl delif "$(echo "$b" | cut -f 5 -d /)" "$dev"
-    done
+    if [ -e "/sys/class/net/$dev/brport" ]; then
+        ip link set "$dev" nomaster
+    fi
     xenstore-rm "$XENBUS_PATH/hotplug-status" 2>/dev/null
     xenstore-rm "$HOTPLUG/vif-ifindex" 2>/dev/null
     xenstore-rm "$HOTPLUG/hotplug" 2>/dev/null
