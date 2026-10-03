@@ -294,7 +294,7 @@ case "${TEST_CASE}" in
         # bank right after the kernel, where the initrd is copied
         DOM0_RAMDISK_ADDR=0xe0000000
         DOM0_RAMDISK_PATH=${INITRD}
-        DOM0_BOOTARGS="rw root=/dev/ram ramdisk_size=600000 console=hvc0 keep_bootcon bootmem_debug debug dom0_mem=512M"
+        DOM0_BOOTARGS="rw ${DOM0_ROOT_ARGS:-root=/dev/ram ramdisk_size=600000} console=hvc0 keep_bootcon bootmem_debug debug dom0_mem=512M"
 
         echo "PLATFORM_NAME=\"${PLATFORM_NAME}\"
         PLATFORM_CPU_NUM=\"${PLATFORM_PCPU_NUM}\"
