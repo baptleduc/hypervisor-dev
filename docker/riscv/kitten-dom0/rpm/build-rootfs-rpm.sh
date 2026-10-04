@@ -52,32 +52,19 @@ if [ ${#extra[@]} -gt 0 ]; then
 fi
 
 log "toolstack RPMs"
-# dnf resolves the set against Kitten, except for two packages whose
-# Requires cannot be met on riscv64 and are not needed here; rpm installs
-# those without dependency checks first, so dnf finds them in place:
-# - xenopsd-xc: xen-hypervisor >= 4.20.2 (an x86 version floor; Xen is 4.18)
-# - xcp-networkd: bridge-utils and dhcp-client (gone from EL10; bridges
-#   are made with ip, brctl is a stub, and the management address is static)
-# Scriptlets are off: they assume an XCP-ng host, units are enabled below.
-nodeps=(xenopsd-xc xcp-networkd)
-blocked=() toolstack=()
+# dnf resolves the whole set against Kitten. Scriptlets are off: they
+# assume an XCP-ng host; the units are enabled below instead.
+toolstack=()
 for r in "$IN"/rpms/*.rpm; do
-  name=$(rpm -qp --qf '%{NAME}' "$r")
-  case "$name" in
+  case "$(rpm -qp --qf '%{NAME}' "$r")" in
   *-devel | *-doc | *-tests | *simulator* | *debuginfo | *debugsource | \
-    xapi-storage-ocaml-plugin-runtime | xapi-sdk | busybox-petitboot) continue ;;
+    xapi-storage-ocaml-plugin-runtime | xapi-sdk | busybox-petitboot) ;;
+  *) toolstack+=("$r") ;;
   esac
-  if [[ " ${nodeps[*]} " == *" $name "* ]]; then
-    blocked+=("$r")
-  else
-    toolstack+=("$r")
-  fi
 done
-rpm --root "$R" -i --nodeps --noscripts "${blocked[@]}"
 dnf -y -q --installroot="$R" --releasever=10 --setopt=install_weak_deps=False \
   --setopt=tsflags=nodocs,noscripts install "${toolstack[@]}"
-toolstack+=("${blocked[@]}")
-echo "installed ${#toolstack[@]} toolstack RPMs (${#blocked[@]} without dependency checks)"
+echo "installed ${#toolstack[@]} toolstack RPMs"
 
 log "RISC-V extras from the payload"
 extras=(
