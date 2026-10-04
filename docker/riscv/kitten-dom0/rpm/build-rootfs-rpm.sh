@@ -40,11 +40,10 @@ rm -rf "$R"
 # and check for at start-up (zstd for xenopsd, ethtool for xcp-networkd;
 # sshd for xapi, which configures the SSH service at start-up and dies
 # when systemctl cannot)
-# rsyslog: xcp-ng-release-config ships its unit, not a Require on it
 "${DNF[@]}" install systemd systemd-udev bash python3 dnf iproute util-linux \
   kmod procps-ng coreutils findutils gawk sed grep tar gzip wget openssl \
   stunnel pam passwd shadow-utils hostname less vim-minimal e2fsprogs libnl3 \
-  ncurses iputils json-c zstd ethtool openssh-server rsyslog
+  ncurses iputils json-c zstd ethtool openssh-server
 shopt -s nullglob
 extra=("$IN"/*.riscv64.rpm)
 if [ ${#extra[@]} -gt 0 ]; then
