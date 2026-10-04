@@ -91,8 +91,10 @@ install -D -m 644 "$RD/conf/xapi-riscv.conf" "$R/etc/xapi.conf.d/riscv.conf"
 install -D -m 644 "$RD/conf/xenopsd-riscv.conf" "$R/etc/xenopsd.conf.d/riscv.conf"
 # Linux bridges, not Open vSwitch (not built for riscv64)
 install -D -m 644 "$RD/conf/network.conf" "$R/etc/xensource/network.conf"
-# networkd's brctl stays a stub (see host-setup); it has no conf.d
-echo "brctl=/usr/libexec/xenopsd-stub" >>"$R/etc/xcp-networkd.conf"
+# networkd bridges with brctl, which Kitten lacks: an ip link shim (it
+# has no conf.d)
+install -D -m 755 "$RD/brctl" "$R/usr/libexec/xcpng-riscv/brctl"
+echo "brctl=/usr/libexec/xcpng-riscv/brctl" >>"$R/etc/xcp-networkd.conf"
 install -D -m 755 "$RD/host-setup" "$R/usr/libexec/xcpng-riscv/host-setup"
 install -D -m 755 "$RD/firstboot" "$R/usr/libexec/xcpng-riscv/firstboot"
 install -D -m 755 "$KD/dom0term.sh" "$R/usr/libexec/xcpng-riscv/dom0term.sh"
