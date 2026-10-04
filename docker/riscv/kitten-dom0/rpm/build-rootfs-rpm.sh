@@ -43,7 +43,8 @@ rm -rf "$R"
 "${DNF[@]}" install systemd systemd-udev bash python3 dnf iproute util-linux \
   kmod procps-ng coreutils findutils gawk sed grep tar gzip wget openssl \
   stunnel pam passwd shadow-utils hostname less vim-minimal e2fsprogs libnl3 \
-  ncurses iputils json-c zstd ethtool openssh-server
+  ncurses iputils json-c zstd ethtool openssh-server \
+  openssh-clients
 shopt -s nullglob
 extra=("$IN"/*.riscv64.rpm)
 if [ ${#extra[@]} -gt 0 ]; then
@@ -95,6 +96,7 @@ install -D -m 644 "$RD/conf/network.conf" "$R/etc/xensource/network.conf"
 install -D -m 755 "$RD/brctl" "$R/usr/libexec/xcpng-riscv/brctl"
 echo "brctl=/usr/libexec/xcpng-riscv/brctl" >>"$R/etc/xcp-networkd.conf"
 install -D -m 755 "$RD/host-setup" "$R/usr/libexec/xcpng-riscv/host-setup"
+install -D -m 755 "$RD/vncterm-guest" "$R/usr/libexec/xcpng-riscv/vncterm-guest"
 install -D -m 755 "$RD/firstboot" "$R/usr/libexec/xcpng-riscv/firstboot"
 install -D -m 755 "$KD/dom0term.sh" "$R/usr/libexec/xcpng-riscv/dom0term.sh"
 echo xcp-ng-riscv64 >"$R/etc/hostname"
