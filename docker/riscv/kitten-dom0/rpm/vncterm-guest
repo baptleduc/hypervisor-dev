@@ -3,4 +3,4 @@
 # 10.2.2-2 has -g). xenopsd counts the vncterm it started as running
 # only while its command line holds the configured path, this script's
 # (Service.PV_Vnc.expected_cmdline_items), so exec keeps it as argv[0]
-exec -a "$0" /usr/lib64/xen/bin/vncterm -g 180x56 "$@"
+exec -a "$0" /usr/lib64/xen/bin/vncterm -g 180x54 "$@"
