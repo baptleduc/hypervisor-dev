@@ -2,8 +2,16 @@
 # Boot-time host set-up for the RISC-V dom0 (xcpng-riscv-host.service):
 # what an XCP-ng install and firstboot provide on x86.
 set -u
-# The inventory xapi, xcp-networkd and xen-init-dom0 read (kept once made)
+# The inventory xapi, xcp-networkd and xen-init-dom0 read (kept once made).
+# Without it they would start on no host identity: fail here, so systemd
+# holds back xen-init-dom0 and xapi (both Require this unit)
 /usr/libexec/gen-xensource-inventory
+# shellcheck disable=SC1091
+. /etc/xensource-inventory 2>/dev/null
+if [ -z "${INSTALLATION_UUID:-}" ] || [ -z "${CONTROL_DOMAIN_UUID:-}" ]; then
+    echo "host-setup: no usable /etc/xensource-inventory" >&2
+    exit 1
+fi
 # ponytail: QEMU user networking always hands out 10.0.2.15, so no DHCP
 # client; use one once dom0 runs on other networks
 if [ -e /sys/class/net/eth0 ]; then
