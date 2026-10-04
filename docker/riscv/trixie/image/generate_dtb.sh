@@ -286,7 +286,8 @@ case "${TEST_CASE}" in
 
         CONFIG_FILE="dom0.conf"
         PLATFORM_NAME=dom0-qemu-virt
-        PLATFORM_RAM_SIZE=3g
+        # 5g: room for a container guest (K3s wants ~1 GiB) next to dom0_mem=1536M
+        PLATFORM_RAM_SIZE=5g
         PLATFORM_XEN_BOOTARGS="com1=poll sched=null dom0_max_vcpus=1 dom0_mem=1536M"
         DOM0_KERNEL_ADDR=0x808ef000
         DOM0_KERNEL_PATH=${KERNEL}
