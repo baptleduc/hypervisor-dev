@@ -281,14 +281,16 @@ case "${TEST_CASE}" in
         elif [ "$TEST_CASE" = "dom0-test" ]; then
             PLATFORM_PCPU_NUM=1
         elif [ "$TEST_CASE" = "dom0-domU-test" ]; then
-            PLATFORM_PCPU_NUM=2
+            # sched=null pins one vCPU per pCPU: dom0 plus a 2-vCPU guest
+            # (keep in step with -smp in the Makefile)
+            PLATFORM_PCPU_NUM=3
         fi
 
         CONFIG_FILE="dom0.conf"
         PLATFORM_NAME=dom0-qemu-virt
         # 5g: room for a container guest (K3s wants ~1 GiB) next to dom0_mem=1536M
         PLATFORM_RAM_SIZE=5g
-        PLATFORM_XEN_BOOTARGS="com1=poll sched=null dom0_max_vcpus=1 dom0_mem=1536M"
+        PLATFORM_XEN_BOOTARGS="com1=poll sched=null dom0_max_vcpus=1 dom0_mem=1536M noreboot"
         DOM0_KERNEL_ADDR=0x808ef000
         DOM0_KERNEL_PATH=${KERNEL}
         # High in RAM, so Xen's 1:1 allocation of dom0 gets a large first
