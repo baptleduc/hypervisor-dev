@@ -7,7 +7,9 @@
 #
 # Runs as root in a riscv64 AlmaLinux Kitten container, with this
 # directory's parent at /kd, and /in holding dom0-payload.tar.gz, the
-# toolstack RPMs in /in/rpms and extra library RPMs (*.riscv64.rpm):
+# toolstack RPMs in /in/rpms and extra library RPMs (*.riscv64.rpm), and
+# optionally /in/overlay, a tree copied as is onto the root last (site
+# files: ssh keys, lab helpers, locally built tools):
 #   docker run --rm --platform linux/riscv64 -v <kitten-dom0>:/kd:ro \
 #     -v <in>:/in:ro -v <out>:/out quay.io/almalinuxorg/almalinux:10-kitten \
 #     /kd/rpm/build-rootfs-rpm.sh
@@ -19,7 +21,9 @@ KD=$(cd "$(dirname "$0")/.." && pwd)
 RD=$KD/rpm
 R=${ROOT:-/rootfs}
 IMG=$OUT/${IMG_NAME:-kitten-dom0-rpm.img}
-SIZE=${IMG_SIZE:-3G}
+# The local SR keeps its VDIs inside this filesystem: a Debian guest
+# disk is 8 GiB, so 3 GiB was only ever enough for the dom0 itself
+SIZE=${IMG_SIZE:-12G}
 PAYLOAD=$IN/dom0-payload.tar.gz
 log() { echo "== $*"; }
 
@@ -154,6 +158,11 @@ echo "checked $(wc -l <"$OUT/rpm-dom0-sonames.txt") sonames"
 if [ ${#missing[@]} -gt 0 ]; then
   echo "NOT RESOLVED: ${missing[*]}"
   exit 3
+fi
+
+if [ -d "$IN/overlay" ]; then
+  log "site overlay"
+  cp -a "$IN/overlay/." "$R/"
 fi
 
 log "image"
