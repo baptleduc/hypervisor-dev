@@ -39,7 +39,7 @@ QEMU_COMMON_FLAGS = \
 	-device loader,file=$(KERNEL),addr=0x808ef000
 
 QEMU_BASE_FLAGS = $(QEMU_COMMON_FLAGS) \
-	-netdev user,id=net0,hostfwd=tcp::443-10.0.2.15:443,dhcpstart=10.0.2.16 \
+	-netdev user,id=net0,hostfwd=tcp::443-10.0.2.15:443,hostfwd=tcp::2222-10.0.2.15:22,dhcpstart=10.0.2.16 \
 	-device virtio-net-device,netdev=net0 \
 	-device loader,file=$(INITRD),addr=0xe0000000 \
 	-dtb $(DTB_DIR)/dom0-qemu-virt.dtb
