@@ -1,0 +1,16 @@
+#!/bin/sh
+# brctl for xcp-networkd on a dom0 without bridge-utils (Kitten has none):
+# the five subcommands networkd calls (network_utils.ml, module Brctl),
+# done with ip link
+case "$1" in
+addbr) ip link add "$2" type bridge ;;
+delbr) ip link del "$2" ;;
+addif) ip link set "$3" master "$2" ;;
+delif) ip link set "$3" nomaster ;;
+# brctl takes seconds, ip link centiseconds
+setfd) ip link set "$2" type bridge forward_delay "$(($3 * 100))" ;;
+*)
+    echo "brctl: unsupported: $*" >&2
+    exit 1
+    ;;
+esac

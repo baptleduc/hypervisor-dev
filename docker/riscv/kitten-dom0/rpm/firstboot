@@ -1,8 +1,7 @@
 #!/bin/bash
 # Once xapi is up (xcpng-riscv-firstboot.service): name the pool, and
 # introduce the dom0 NICs as PIFs so XO lists them and rrdp-netdev graphs
-# them. Not plugged: plugging bridges eth0, which carries the QEMU hostfwd
-# that XO comes in through.
+# them, and make eth0 the management PIF so VMs can join its network.
 set -u
 # xapi-init-complete is not enough: xe can still be refused for a while
 i=0
@@ -14,3 +13,12 @@ done
 name=$(xe pool-param-get uuid="$pool" param-name=name-label) || exit 1
 [ -n "$name" ] || xe pool-param-set uuid="$pool" name-label="XCP-ng on RISC-V" || exit 1
 xe pif-scan host-uuid="$(xe host-list --minimal)"
+# The XCP-ng way: a static PIF made management, so networkd builds breth0
+# and moves 10.0.2.15 (QEMU user networking, no DHCP client in dom0) onto
+# it; the hostfwd XO comes in through follows the address
+[ -n "$(xe pif-list device=eth0 management=true --minimal)" ] && exit 0
+pif=$(xe pif-list device=eth0 --minimal)
+[ -n "$pif" ] || exit 0
+xe pif-reconfigure-ip uuid="$pif" mode=static IP=10.0.2.15 \
+    netmask=255.255.255.0 gateway=10.0.2.2 DNS=10.0.2.3 &&
+    xe host-management-reconfigure pif-uuid="$pif"
