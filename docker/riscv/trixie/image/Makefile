@@ -34,7 +34,7 @@ QEMU_COMMON_FLAGS = \
 	-bios $(OPENSBI) \
 	-smp 2 \
 	-nographic \
-	-m 3g \
+	-m 5g \
 	-kernel $(XEN_BIN) \
 	-device loader,file=$(KERNEL),addr=0x808ef000
 
