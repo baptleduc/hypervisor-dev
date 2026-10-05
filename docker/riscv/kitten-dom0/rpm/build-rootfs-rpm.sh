@@ -162,7 +162,12 @@ fi
 
 if [ -d "$IN/overlay" ]; then
   log "site overlay"
-  cp -a "$IN/overlay/." "$R/"
+  # Owned by root whoever built the overlay, modes kept (helpers stay
+  # executable); existing directories such as /root keep their own owner
+  # and mode. cp -a copied the builder's uid and /root's 0775 too, and
+  # sshd's StrictModes then refused /root/.ssh/authorized_keys.
+  tar -C "$IN/overlay" --owner=0 --group=0 -cf - . |
+    tar -C "$R" --no-overwrite-dir -xf -
 fi
 
 log "image"
