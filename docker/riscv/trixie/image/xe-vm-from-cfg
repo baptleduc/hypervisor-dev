@@ -7,11 +7,17 @@ cfg=${1:?usage: $0 <xenopsd-cli config>}
 # key = "value" -> key="value", then source it
 eval "$(sed -n 's/^\([a-z_]*\) *= *\(.*\)$/\1=\2/p' "$cfg")"
 
-# xapi only boots kernels and ramdisks from this directory
+# xapi only boots kernels and ramdisks from this directory. A file already
+# in it is used in place: cp refuses to copy a file onto itself, and under
+# set -e that would stop the script before the VM is created.
 guest=/var/lib/xcp/guest
 mkdir -p $guest
-cp "$kernel" $guest/
-[ -n "$ramdisk" ] && cp "$ramdisk" $guest/
+put() {
+    [ "$(cd "$(dirname "$1")" && pwd -P)" = "$(cd $guest && pwd -P)" ] ||
+        cp "$1" $guest/
+}
+put "$kernel"
+[ -n "$ramdisk" ] && put "$ramdisk"
 
 vm=$(xe vm-create name-label="$name")
 xe vm-param-set uuid=$vm domain-type="${builder:-riscv}" PV-bootloader="" \
