@@ -217,11 +217,13 @@ vdi_attach)
     # params_of_backend keeps this map as it is instead of putting
     # backend-kind=vbd3 (tapdisk3, not here) in front of it. sr-uuid and
     # vdi-uuid are what xcp-rrdd-iostat maps a disk to its SR and VM by.
+    # mem-pool is the key stock SM writes for the SR (xentop-ng reads it).
     respond "<value><struct>$(member params "$(str "$dev")")$(member params_nbd \
         '<value></value>')$(member o_direct '<value><boolean>1</boolean></value>')$(member \
         o_direct_reason '<value></value>')$(member xenstore_data "<value><struct>$(member \
         backend-kind "$(str vbd)")$(member vbd3 "$(str unused)")$(member \
-        sr-uuid "$(str "$SR_UUID")")$(member vdi-uuid "$(str "$VDI_UUID")")</struct></value>")</struct></value>"
+        sr-uuid "$(str "$SR_UUID")")$(member mem-pool "$(str "$SR_UUID")")$(member \
+        vdi-uuid "$(str "$VDI_UUID")")</struct></value>")</struct></value>"
     exit 0
     ;;
 vdi_detach)
