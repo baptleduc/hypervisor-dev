@@ -52,6 +52,10 @@ RUN apt-get update && apt-get -y --no-install-recommends install \
     rm -rf /var/lib/apt/lists/* && \
     opam install netlink.0.3.4
 
+# xcp-rrdd's plugins (rrdp-cpu, rrdp-squeezed, ...) need cstruct for their
+# shared-memory pages. Separate layer, same reason.
+RUN opam install cstruct-unix ppx_cstruct
+
 ENV PATH=/opam/default/bin:$PATH \
     OCAMLPATH=/opam/default/lib \
     CAML_LD_LIBRARY_PATH=/opam/default/lib/stublibs

@@ -5,7 +5,7 @@
 #   sockexec  binds /var/lib/xcp/websockproxy for wsproxy (no systemd)
 # Run in the xen-riscv64-trixie image with /build/xen (tools built) and
 # /build/vncterm (vncterm-10.2.2 tarball, unpacked) mounted.
-# wsproxy itself is built from xen-api: dune build ocaml/wsproxy/cli/wsproxy.exe
+# wsproxy itself is built from xen-api, by docker/riscv/xapi's build-xapi.
 set -euo pipefail
 X=${XEN:-/build/xen}
 OUT=${OUT:-/build/xen-api/_riscv}

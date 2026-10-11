@@ -1,6 +1,6 @@
 #!/bin/sh
-# Build xapi, xe, gencert, squeezed, v6d, xcp-networkd, xenopsd-xc,
-# xenopsd-cli and forkexecd (xenopsd spawns xenguest through it) from
+# Build xapi, xe, gencert, squeezed, v6d, xcp-networkd, xcp-rrdd and its
+# plugins, wsproxy, xenopsd-xc, xenopsd-cli and forkexecd (xenopsd spawns xenguest through it) from
 # /build/xen-api against the Xen tree mounted at /build/xen (tools already
 # built by xen-riscv64-trixie).
 set -e
@@ -57,7 +57,13 @@ dune build --profile=release \
     ocaml/gencert/gencert.exe \
     ocaml/squeezed/src/squeezed.exe \
     ocaml/xcp-featured/bin/xcp_featured.exe \
-    ocaml/networkd/bin/networkd.exe
+    ocaml/networkd/bin/networkd.exe \
+    ocaml/xcp-rrdd/bin/rrdd/xcp_rrdd.exe \
+    ocaml/xcp-rrdd/bin/rrdp-cpu/rrdp_cpu.exe \
+    ocaml/xcp-rrdd/bin/rrdp-squeezed/rrdp_squeezed.exe \
+    ocaml/xcp-rrdd/bin/rrdp-netdev/rrdp_netdev.exe \
+    ocaml/xcp-rrdd/bin/rrdp-iostat/rrdp_iostat.exe \
+    ocaml/wsproxy/cli/wsproxy.exe
 # forkexecd spawns everything through this C helper, not built by dune
 make -C ocaml/forkexecd/helper vfork_helper
 
@@ -73,8 +79,16 @@ install -s -m 755 _build/default/ocaml/gencert/gencert.exe $OUT/gencert
 install -s -m 755 _build/default/ocaml/squeezed/src/squeezed.exe $OUT/squeezed
 install -s -m 755 _build/default/ocaml/xcp-featured/bin/xcp_featured.exe $OUT/v6d
 install -s -m 755 _build/default/ocaml/networkd/bin/networkd.exe $OUT/xcp-networkd
+# Stats for XO: xcp-rrdd and the plugins the trixie image installs
+install -s -m 755 _build/default/ocaml/xcp-rrdd/bin/rrdd/xcp_rrdd.exe $OUT/xcp-rrdd
+for p in cpu squeezed netdev iostat; do
+    install -s -m 755 _build/default/ocaml/xcp-rrdd/bin/rrdp-$p/rrdp_$p.exe $OUT/xcp-rrdd-$p
+done
+# dom0 console for XO, with vncterm and sockexec from docker/riscv/console
+install -s -m 755 _build/default/ocaml/wsproxy/cli/wsproxy.exe $OUT/wsproxy
 # Config files xapi requires at start-up
 install -m 644 scripts/pool.conf $OUT/pool.conf
 install -m 644 scripts/db.conf.skel $OUT/db.conf
 install -m 644 scripts/udhcpd.skel $OUT/udhcpd.skel
+install -m 644 scripts/xcp-rrdd-conf $OUT/xcp-rrdd.conf
 echo "built into $OUT"
