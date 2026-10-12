@@ -1,0 +1,6 @@
+# Xen and dom0 command lines, read by /boot/boot.scr at every boot.
+# One name=value per line, the value runs to the end of the line.
+# Only xen_args and dom0_args belong here: env import would let this file
+# set any U-Boot variable, load addresses included.
+xen_args=com1=poll sched=null dom0_max_vcpus=1 dom0_mem=1536M noreboot
+dom0_args=rw root=/dev/vda1 console=hvc0 keep_bootcon bootmem_debug debug dom0_mem=512M
