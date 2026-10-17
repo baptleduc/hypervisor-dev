@@ -36,7 +36,17 @@ load ${devtype} ${devnum}:${distro_bootpart} ${xen_uimg_r} ${prefix}xen.uimg || 
 load ${devtype} ${devnum}:${distro_bootpart} ${dom0_addr} ${prefix}vmlinuz-xcpng || exit
 setenv dom0_size 0x${filesize}
 
-fdt move ${fdtcontroladdr} ${fdt_addr_r} 0x20000
+# The board's device tree: /boot/dtb/${fdtfile} when the environment names
+# one and the file exists (vendor U-Boots often keep the OS tree apart from
+# their own), else U-Boot's control tree, which on QEMU is the tree QEMU
+# generates.
+if test -n "${fdtfile}" && load ${devtype} ${devnum}:${distro_bootpart} ${fdt_addr_r} ${prefix}dtb/${fdtfile}; then
+  echo "boot.scr: device tree ${prefix}dtb/${fdtfile}"
+  fdt addr ${fdt_addr_r}
+else
+  echo "boot.scr: device tree from U-Boot (fdtcontroladdr)"
+  fdt move ${fdtcontroladdr} ${fdt_addr_r} 0x20000
+fi
 fdt resize 4096
 fdt rm /soc/pci@30000000
 fdt set /chosen "#address-cells" <2>
