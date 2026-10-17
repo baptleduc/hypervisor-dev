@@ -15,7 +15,7 @@
 #     /kd/rpm/build-rootfs-rpm.sh
 # DISK_LAYOUT=gpt puts the filesystem in partition 1 of a GPT disk (from
 # 1 MiB), which U-Boot's distro boot needs to find /boot/boot.scr; boot
-# dom0 from it with root=/dev/vda1 (image Makefile: DOM0_ROOT=/dev/vda1).
+# dom0 from it: boot.scr passes root=PARTUUID= for that partition.
 # The default, whole, is the filesystem alone, as before.
 set -euo pipefail
 

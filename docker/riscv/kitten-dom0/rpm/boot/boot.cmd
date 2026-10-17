@@ -16,10 +16,20 @@
 setexpr xen_uimg_r ${kernel_addr_r} - 0x40
 setenv dom0_addr ${ramdisk_addr_r}
 setenv xen_args "com1=poll sched=null dom0_max_vcpus=1 dom0_mem=1536M noreboot"
-setenv dom0_args "rw root=/dev/vda1 console=hvc0 keep_bootcon bootmem_debug debug dom0_mem=512M"
+setenv dom0_args "rw console=hvc0 keep_bootcon bootmem_debug debug dom0_mem=512M"
 
 if load ${devtype} ${devnum}:${distro_bootpart} ${pxefile_addr_r} ${prefix}xen-cmdline.txt; then
   env import -t ${pxefile_addr_r} ${filesize}
+fi
+
+# dom0's root is the partition this script was loaded from, by PARTUUID:
+# it does not depend on the disk type (virtio, NVMe, SD, eMMC) and needs
+# no initrd. A root= in dom0_args comes later on the command line and wins.
+setenv dom0_root
+if part uuid ${devtype} ${devnum}:${distro_bootpart} dom0_partuuid; then
+  setenv dom0_root "root=PARTUUID=${dom0_partuuid} "
+else
+  echo "boot.scr: no partition UUID, dom0_args must carry root="
 fi
 
 load ${devtype} ${devnum}:${distro_bootpart} ${xen_uimg_r} ${prefix}xen.uimg || exit
@@ -34,7 +44,7 @@ fdt set /chosen "#size-cells" <2>
 fdt mknode /chosen module
 fdt set /chosen/module compatible "multiboot,kernel" "multiboot,module"
 fdt set /chosen/module reg <0x0 ${dom0_addr} 0x0 ${dom0_size}>
-fdt set /chosen/module bootargs "${dom0_args}"
+fdt set /chosen/module bootargs "${dom0_root}${dom0_args}"
 
 # bootm writes the bootargs variable into /chosen/bootargs: Xen's command line
 setenv bootargs "${xen_args}"
