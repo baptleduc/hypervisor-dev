@@ -32,9 +32,9 @@ QEMU_COMMON_FLAGS = \
 	-M virt,aclint=off,aia=aplic-imsic,aia-guests=7 \
 	-cpu rv64,smstateen=on,sstc=off\
 	-bios $(OPENSBI) \
-	-smp 3 \
+	-smp 6 \
 	-nographic \
-	-m 5g \
+	-m 8g \
 	-kernel $(XEN_BIN) \
 	-device loader,file=$(KERNEL),addr=0x808ef000
 
