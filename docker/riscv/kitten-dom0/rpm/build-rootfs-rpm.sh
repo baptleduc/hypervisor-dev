@@ -121,7 +121,8 @@ for u in proc-xen.mount xenstored.service xenconsoled.service xen-init-dom0.serv
   xcpng-riscv-host.service xcpng-riscv-firstboot.service dom0term.service \
   v6d.service gencert.service wsproxy.socket toolstack.target \
   xapi-wait-init-complete.service generate-iscsi-iqn.service \
-  control-domain-params-init.service xapi-domains.service; do
+  control-domain-params-init.service xapi-domains.service \
+  save-boot-info.service; do
   chroot "$R" systemctl enable "$u"
 done
 chroot "$R" systemctl set-default multi-user.target
