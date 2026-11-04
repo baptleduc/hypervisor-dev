@@ -102,6 +102,9 @@ echo "brctl=/usr/libexec/xcpng-riscv/brctl" >>"$R/etc/xcp-networkd.conf"
 install -D -m 755 "$RD/host-setup" "$R/usr/libexec/xcpng-riscv/host-setup"
 install -D -m 755 "$RD/vncterm-guest" "$R/usr/libexec/xcpng-riscv/vncterm-guest"
 install -D -m 755 "$RD/firstboot" "$R/usr/libexec/xcpng-riscv/firstboot"
+# Makes the template from /usr/share/xcpng-riscv/templates, which the
+# overlay fills; without those files it does nothing
+install -D -m 755 "$RD/install-template" "$R/usr/libexec/xcpng-riscv/install-template"
 install -D -m 755 "$KD/dom0term.sh" "$R/usr/libexec/xcpng-riscv/dom0term.sh"
 echo xcp-ng-riscv64 >"$R/etc/hostname"
 printf '/dev/vda / ext4 defaults 0 1\n' >"$R/etc/fstab"
