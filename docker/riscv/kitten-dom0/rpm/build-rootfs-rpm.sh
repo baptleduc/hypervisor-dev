@@ -95,6 +95,11 @@ install -D -m 644 "$RD/conf/xapi-riscv.conf" "$R/etc/xapi.conf.d/riscv.conf"
 install -D -m 644 "$RD/conf/xenopsd-riscv.conf" "$R/etc/xenopsd.conf.d/riscv.conf"
 # Linux bridges, not Open vSwitch (not built for riscv64)
 install -D -m 644 "$RD/conf/network.conf" "$R/etc/xensource/network.conf"
+# generate-iscsi-iqn (xapi-core) writes its IQN to /etc/firstboot.d/data,
+# which the XCP-ng installer creates and no package owns. The unit itself
+# is enabled below, like every unit here: with scriptlets off, no preset
+# ever runs in this image
+install -d -m 755 "$R/etc/firstboot.d/data"
 # networkd bridges with brctl, which Kitten lacks: an ip link shim (it
 # has no conf.d)
 install -D -m 755 "$RD/brctl" "$R/usr/libexec/xcpng-riscv/brctl"
@@ -114,7 +119,10 @@ printf 'XENCONSOLED_TRACE=guest\nXENCONSOLED_LOG_DIR=/var/log/xen/console\n' \
   >>"$R/etc/sysconfig/xencommons"
 for u in proc-xen.mount xenstored.service xenconsoled.service xen-init-dom0.service \
   xcpng-riscv-host.service xcpng-riscv-firstboot.service dom0term.service \
-  v6d.service gencert.service wsproxy.socket toolstack.target; do
+  v6d.service gencert.service wsproxy.socket toolstack.target \
+  xapi-wait-init-complete.service generate-iscsi-iqn.service \
+  control-domain-params-init.service xapi-domains.service \
+  save-boot-info.service; do
   chroot "$R" systemctl enable "$u"
 done
 chroot "$R" systemctl set-default multi-user.target

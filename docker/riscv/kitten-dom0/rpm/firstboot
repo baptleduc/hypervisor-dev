@@ -4,7 +4,9 @@
 # rrdp-netdev graphs them, and make eth0 the management PIF so VMs can
 # join its network.
 set -u
-# xapi-init-complete is not enough: xe can still be refused for a while
+# Ordered after xapi.service only, not xapi-init-complete.target: xapi
+# completes init only once the management PIF below is connected, so
+# waiting for it here deadlocks a fresh image. Poll until xe answers.
 i=0
 until pool=$(xe pool-list --minimal 2>/dev/null) && [ -n "$pool" ]; do
     i=$((i + 1))
