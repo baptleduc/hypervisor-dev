@@ -128,7 +128,8 @@ case "$CMD" in
 sr_get_driver_info)
     caps=""
     for c in SR_CREATE SR_DELETE SR_ATTACH SR_DETACH SR_SCAN SR_UPDATE \
-        VDI_CREATE VDI_DELETE VDI_ATTACH VDI_DETACH VDI_ACTIVATE VDI_DEACTIVATE; do
+        VDI_CREATE VDI_DELETE VDI_ATTACH VDI_DETACH VDI_ACTIVATE VDI_DEACTIVATE \
+        VDI_CLONE; do
         caps="$caps$(str $c)"
     done
     respond "<value><struct>$(member name "$(str rawfile)")$(member description \
@@ -189,6 +190,47 @@ vdi_create)
     respond "<value><struct>$(member uuid "$(str "$VDI_UUID")")$(member location \
         "$(str "$VDI_UUID")")</struct></value>"
     exit 0
+    ;;
+vdi_clone)
+    # A full copy, kept sparse, so only the blocks the source holds are
+    # written. Without VDI_CLONE, xapi falls back to VDI.copy, which
+    # writes every block of the virtual size. Refused while the source
+    # is attached: a copy of a disk in use is not consistent.
+    src=$DIR/$VDI_LOC.raw
+    [ -f "$src" ] || fail "no file for VDI $VDI_UUID"
+    dev=$(loop_of "$src")
+    [ -z "$dev" ] || fail "$src is attached on $dev"
+    # Check the space first: on a directory SR, a full disk is dom0's
+    need=$(du -k "$src" | cut -f 1)
+    set -- $(df -k "$DIR" | tail -n 1)
+    [ "$4" -gt "$need" ] || fail "$need KiB needed, $4 KiB free in $DIR"
+    new=$(cat /proc/sys/kernel/random/uuid)
+    file=$DIR/$new.raw
+    cp --sparse=always "$src" "$file.tmp" 2>> "$LOG" || {
+        rm -f "$file.tmp"
+        fail "cannot copy $src"
+    }
+    chmod 600 "$file.tmp" && mv "$file.tmp" "$file"
+    size=$(stat -c %s "$file")
+    # xapi sets the name, description and snapshot fields afterwards
+    if ! ref=$(xapi VDI.db_introduce "$(str "$SESSION")" "$(str "$new")" \
+        "$(str '')" "$(str '')" "$(str "$SR_REF")" "$(str user)" \
+        '<value><boolean>0</boolean></value>' '<value><boolean>0</boolean></value>' \
+        '<value><struct></struct></value>' "$(str "$new")" \
+        '<value><struct></struct></value>' '<value><struct></struct></value>' \
+        '<value><boolean>1</boolean></value>' "$(str "$size")" "$(str 0)"); then
+        rm -f "$file"
+        fail "VDI.db_introduce failed"
+    fi
+    log "cloned $src to $file ($size bytes) as $ref"
+    update_sizes
+    respond "<value><struct>$(member uuid "$(str "$new")")$(member location \
+        "$(str "$new")")</struct></value>"
+    exit 0
+    ;;
+vdi_update)
+    # Sent after every clone; nothing to update for a raw file
+    ok
     ;;
 vdi_delete)
     file=$DIR/$VDI_LOC.raw
