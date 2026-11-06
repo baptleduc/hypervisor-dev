@@ -21,9 +21,13 @@ xe host-enable-ssh uuid="$host"
 # The XCP-ng way: a static PIF made management, so networkd builds breth0
 # and moves 10.0.2.15 (QEMU user networking, no DHCP client in dom0) onto
 # it; the hostfwd XO comes in through follows the address
-[ -n "$(xe pif-list device=eth0 management=true --minimal)" ] && exit 0
 pif=$(xe pif-list device=eth0 --minimal)
-[ -n "$pif" ] || exit 0
-xe pif-reconfigure-ip uuid="$pif" mode=static IP=10.0.2.15 \
-    netmask=255.255.255.0 gateway=10.0.2.2 DNS=10.0.2.3 &&
-    xe host-management-reconfigure pif-uuid="$pif"
+if [ -n "$pif" ] && [ -z "$(xe pif-list device=eth0 management=true --minimal)" ]; then
+    xe pif-reconfigure-ip uuid="$pif" mode=static IP=10.0.2.15 \
+        netmask=255.255.255.0 gateway=10.0.2.2 DNS=10.0.2.3 &&
+        xe host-management-reconfigure pif-uuid="$pif"
+fi
+# Last, since it takes a minute or two and xapi only completes its init
+# once the management PIF is up: the riscv64 template XO's New VM starts
+# from, its VIF on eth0's network (install-template)
+/usr/libexec/xcpng-riscv/install-template

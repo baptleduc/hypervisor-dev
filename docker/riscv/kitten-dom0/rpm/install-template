@@ -1,0 +1,95 @@
+#!/bin/bash
+# Make the riscv64 Debian template XO's New VM starts from, as x86 XCP-ng
+# gets its templates at install. Runs from firstboot at every boot and
+# does nothing once the template exists, or when the image ships no
+# template files; also safe to run by hand on a dom0 already set up.
+#
+# Input, put in the image by the builder's overlay:
+#   /usr/share/xcpng-riscv/templates/disk.img.zst  ext4 disk, built with
+#     build-domu-trixie.sh TEMPLATE=1 (no keys, no host keys, no password)
+#   /usr/share/xcpng-riscv/templates/Image.gz      the guest kernel
+set -u
+T=${TEMPLATE_DIR:-/usr/share/xcpng-riscv/templates}
+NAME="Debian 13 Trixie RISC-V"
+TAG=xcpng-riscv-template # other-config key that marks ours
+SIZE=${TEMPLATE_DISK_SIZE:-8GiB}
+MEM=${TEMPLATE_MEMORY_MIB:-1024}
+
+[ -f "$T/disk.img.zst" ] && [ -f "$T/Image.gz" ] || exit 0
+# One run at a time: restarting xapi restarts firstboot too (Requires=),
+# so a run by hand next to it would make a second template
+exec 9>/run/lock/xcpng-riscv-install-template
+flock 9
+[ -z "$(xe template-list other-config:$TAG=debian13 --minimal)" ] || exit 0
+
+fail() {
+    echo "install-template: $*" >&2
+    exit 1
+}
+
+# The rawfile SR step 9 of the guide creates, made here if there is none.
+# xapi takes an SR's features from its driver's SM record, which it
+# re-reads at each start, so any rawfile SR gets the rawfileSR's
+# VDI_CLONE: that is what lets a VM from this template get a sparse copy
+# of the disk instead of a full one
+host=$(xe host-list --minimal)
+sr=$(xe sr-list type=rawfile --minimal | cut -d, -f1)
+if [ -z "$sr" ]; then
+    mkdir -p /var/lib/rawfile
+    sr=$(xe sr-create host-uuid="$host" type=rawfile name-label=Disk \
+        content-type=user device-config:path=/var/lib/rawfile) ||
+        fail "cannot create the rawfile SR"
+fi
+path=$(xe pbd-list sr-uuid="$sr" params=device-config --minimal |
+    sed -n 's/.*path: \([^;]*\).*/\1/p')
+[ -n "$path" ] || path=/var/lib/rawfile
+
+vdi=$(xe vdi-create sr-uuid="$sr" name-label="$NAME disk" virtual-size="$SIZE" \
+    type=user) || fail "cannot create the VDI"
+raw=$path/$sr/$vdi.raw
+[ -f "$raw" ] || fail "no $raw for VDI $vdi"
+# Decompress over the sparse VDI file, then give it back its virtual
+# size and grow the file system into it: blocks the disk does not use
+# stay holes, so the 8 GiB VDI costs about what the disk holds
+bytes=$(xe vdi-param-get uuid="$vdi" param-name=virtual-size)
+if ! { zstd -q -d --sparse -f "$T/disk.img.zst" -o "$raw" &&
+    truncate -s "$bytes" "$raw" &&
+    chmod 600 "$raw" &&
+    resize2fs -f "$raw" >/dev/null 2>&1; }; then
+    xe vdi-destroy uuid="$vdi"
+    fail "cannot write the disk into $raw"
+fi
+
+# xapi only boots kernels from this directory
+guest=/var/lib/xcp/guest
+install -D -m 644 "$T/Image.gz" "$guest/debian13-riscv64-Image.gz"
+
+vm=$(xe vm-create name-label="$NAME") || fail "cannot create the VM"
+# From here a failed step removes the VM and its disk, so the next boot
+# starts over instead of finding half a template
+undo() {
+    xe vm-destroy uuid="$vm" 2>/dev/null
+    xe vdi-destroy uuid="$vdi" 2>/dev/null
+    fail "template not made, rolled back"
+}
+trap undo ERR
+set -E
+xe vm-param-set uuid="$vm" domain-type=riscv PV-bootloader="" \
+    PV-kernel="$guest/debian13-riscv64-Image.gz" PV-ramdisk="" \
+    PV-args="earlycon=sbi console=tty0 console=hvc0 root=/dev/xvda rw xen_fbfront.video=8,1280,800 xen_kbdfront.ptr_size=1280,800" \
+    name-description="riscv64 Debian 13 with a text console. Log in as root on the console: no password, you set one at the first login. SSH needs a key or a password first." \
+    platform:vfb=true
+xe vm-memory-limits-set uuid="$vm" static-min="${MEM}MiB" dynamic-min="${MEM}MiB" \
+    dynamic-max="${MEM}MiB" static-max="${MEM}MiB"
+xe vm-param-set uuid="$vm" VCPUs-max=1
+xe vm-param-set uuid="$vm" VCPUs-at-startup=1
+xe vbd-create vm-uuid="$vm" vdi-uuid="$vdi" device=xvda type=Disk mode=RW \
+    bootable=true >/dev/null
+net=$(xe pif-list device=eth0 params=network-uuid --minimal)
+if [ -n "$net" ]; then
+    xe vif-create vm-uuid="$vm" device=0 network-uuid="$net" >/dev/null
+fi
+# Last, so a half-made VM is never offered as a template
+xe vm-param-set uuid="$vm" other-config:$TAG=debian13 is-a-template=true
+trap - ERR
+echo "install-template: $NAME is template $vm, disk $vdi on SR $sr"
