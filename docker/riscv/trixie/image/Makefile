@@ -50,12 +50,15 @@ QEMU_BASE_FLAGS = $(QEMU_COMMON_FLAGS) \
 # noinitrd: the initrd is an ext2 image, not an initramfs, so with a root
 # other than /dev/ram the kernel would still mount it and run its
 # /linuxrc (busybox has one), and dom0 would carry on from RAM.
+# DOM0_ROOT: /dev/vda1 for a partitioned image (build-rootfs-rpm.sh with
+# DISK_LAYOUT=gpt).
 DOM0_DISK ?=
+DOM0_ROOT ?= /dev/vda
 ifneq ($(DOM0_DISK),)
 QEMU_BASE_FLAGS += \
 	-drive file=$(DOM0_DISK),if=none,format=raw,id=dom0disk \
 	-device virtio-blk-device,drive=dom0disk
-DOM0_ROOT_ARGS := root=/dev/vda noinitrd
+DOM0_ROOT_ARGS := root=$(DOM0_ROOT) noinitrd
 else
 DOM0_ROOT_ARGS := root=/dev/ram ramdisk_size=600000
 endif

@@ -13,6 +13,10 @@
 #   docker run --rm --platform linux/riscv64 -v <kitten-dom0>:/kd:ro \
 #     -v <in>:/in:ro -v <out>:/out quay.io/almalinuxorg/almalinux:10-kitten \
 #     /kd/rpm/build-rootfs-rpm.sh
+# DISK_LAYOUT=gpt puts the filesystem in partition 1 of a GPT disk (from
+# 1 MiB), which U-Boot's distro boot needs to find /boot/boot.scr; boot
+# dom0 from it: boot.scr passes root=PARTUUID= for that partition.
+# The default, whole, is the filesystem alone, as before.
 set -euo pipefail
 
 IN=${IN:-/in}
@@ -24,6 +28,14 @@ IMG=$OUT/${IMG_NAME:-kitten-dom0-rpm.img}
 # The local SR keeps its VDIs inside this filesystem: a Debian guest
 # disk is 8 GiB, so 3 GiB was only ever enough for the dom0 itself
 SIZE=${IMG_SIZE:-12G}
+LAYOUT=${DISK_LAYOUT:-whole}
+case "$LAYOUT" in
+whole | gpt) ;;
+*)
+  echo "Error: DISK_LAYOUT is whole or gpt, not $LAYOUT" >&2
+  exit 1
+  ;;
+esac
 PAYLOAD=$IN/dom0-payload.tar.gz
 log() { echo "== $*"; }
 
@@ -36,7 +48,7 @@ done
 DNF=(dnf -y -q --installroot="$R" --releasever=10 --setopt=install_weak_deps=False --setopt=tsflags=nodocs)
 
 log "tools for the build"
-dnf -y -q install binutils e2fsprogs shadow-utils cpio >/dev/null
+dnf -y -q install binutils e2fsprogs shadow-utils cpio util-linux >/dev/null
 
 log "Kitten base"
 rm -rf "$R"
@@ -104,7 +116,11 @@ install -D -m 755 "$RD/vncterm-guest" "$R/usr/libexec/xcpng-riscv/vncterm-guest"
 install -D -m 755 "$RD/firstboot" "$R/usr/libexec/xcpng-riscv/firstboot"
 install -D -m 755 "$KD/dom0term.sh" "$R/usr/libexec/xcpng-riscv/dom0term.sh"
 echo xcp-ng-riscv64 >"$R/etc/hostname"
-printf '/dev/vda / ext4 defaults 0 1\n' >"$R/etc/fstab"
+if [ "$LAYOUT" = gpt ]; then
+  printf 'LABEL=kitten-dom0 / ext4 defaults 0 1\n' >"$R/etc/fstab"
+else
+  printf '/dev/vda / ext4 defaults 0 1\n' >"$R/etc/fstab"
+fi
 
 log "units"
 cp -r "$RD"/units/* "$R/etc/systemd/system/"
@@ -160,6 +176,23 @@ if [ ${#missing[@]} -gt 0 ]; then
   exit 3
 fi
 
+if [ "$LAYOUT" = gpt ]; then
+  log "U-Boot boot script"
+  # boot.cmd loads these two stable names: the xen-hypervisor and
+  # kernel-xcpng-riscv64 RPMs that ship them must be in /in/rpms
+  for f in xen.uimg vmlinuz-xcpng; do
+    [ -e "$R/boot/$f" ] || {
+      echo "Error: /boot/$f not found, DISK_LAYOUT=gpt needs it" >&2
+      exit 1
+    }
+  done
+  # The same file as mkimage -T script: Kitten has mkimage (uboot-tools)
+  # only in its devel repository
+  python3 "$RD/boot/mkbootscr.py" -n "Kitten dom0" "$RD/boot/boot.cmd" "$R/boot/boot.scr"
+  # Before the site overlay, which may bring its own command lines
+  install -m 644 "$RD/boot/xen-cmdline.txt" "$R/boot/xen-cmdline.txt"
+fi
+
 if [ -d "$IN/overlay" ]; then
   log "site overlay"
   # Owned by root whoever built the overlay, modes kept (helpers stay
@@ -173,8 +206,20 @@ fi
 log "image"
 "${DNF[@]}" clean all >/dev/null 2>&1 || true
 du -sh "$R"
-rm -f "$IMG.tmp"
-truncate -s "$SIZE" "$IMG.tmp"
-mkfs.ext4 -q -L kitten-dom0 -d "$R" "$IMG.tmp"
+rm -f "$IMG.tmp" "$IMG.fs"
+truncate -s "$SIZE" "$IMG.fs"
+mkfs.ext4 -q -L kitten-dom0 -d "$R" "$IMG.fs"
+if [ "$LAYOUT" = gpt ]; then
+  # Partition 1 from 1 MiB; 2 MiB more than the filesystem leaves room
+  # for the primary and backup GPT
+  fs_size=$(stat -c %s "$IMG.fs")
+  truncate -s $((fs_size + 2 * 1024 * 1024)) "$IMG.tmp"
+  printf 'label: gpt\nstart=2048, size=%d, type=linux, name=kitten-dom0\n' \
+    $((fs_size / 512)) | sfdisk -q "$IMG.tmp"
+  dd if="$IMG.fs" of="$IMG.tmp" bs=1M seek=1 conv=notrunc,sparse status=none
+  rm -f "$IMG.fs"
+else
+  mv -f "$IMG.fs" "$IMG.tmp"
+fi
 mv -f "$IMG.tmp" "$IMG"
 ls -la "$IMG"
